@@ -13,6 +13,7 @@ from .resources import (
     CollectionPublisher,
     CollectionTables,
     OAISampler,
+    ssh_compute
 )
 from .sensors import staged_study_sensor, injest_and_analyze_study_job
 
@@ -24,15 +25,17 @@ dbt_assets = []
 all_assets = load_assets_from_modules([oai, huggingface, injested_study])
 
 stage_oai_samples_job = define_asset_job("stage_oai_samples", [oai.oai_samples,], description="Stages OAI samples")
-jobs = [stage_oai_samples_job, injest_and_analyze_study_job]
+run_oai_job = define_asset_job("run_oai", [oai.oai_samples,oai.thickness_images], description="Run OAI on samples")
+jobs = [stage_oai_samples_job, run_oai_job, injest_and_analyze_study_job]
 
 resources = {
     # "dbt": dbt,
     "io_manager": DuckDBPolarsIOManager(database=DATABASE_PATH, schema="main"),
-    "oai_sampler": OAISampler(oai_data_root="/mnt/cybertron/OAI", n_samples=1),
+    "oai_sampler": OAISampler(oai_data_root="/mnt/cybertron/OAI", n_samples=2),
     "collection_publisher": CollectionPublisher(hf_token=EnvVar("HUGGINGFACE_TOKEN")),
     "duckdb": duckdb_resource,
     "collection_tables": CollectionTables(duckdb=duckdb_resource),
+    "ssh_compute": ssh_compute
 }
 
 sensors = [staged_study_sensor]

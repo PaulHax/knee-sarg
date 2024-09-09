@@ -16,7 +16,7 @@ from slugify import slugify
 import ngff_zarr
 import itk
 
-from ..resources import STAGED_DIR, INJESTED_DIR, COLLECTIONS_DIR, CollectionTables
+from ..resources import STAGED_DIR, INGESTED_DIR, COLLECTIONS_DIR, CollectionTables
 
 log = get_dagster_logger()
 
@@ -92,7 +92,7 @@ def injested_study(config: StagedStudyConfig, collection_tables: CollectionTable
             ngff_zarr.to_ngff_zarr(collection_ome_zarr_path  / 'image.ome.zarr', multiscales)
 
     staged_study_path = STAGED_DIR / config.collection_name / config.uploader / config.patient_id / config.study_id
-    injested_patient_path = INJESTED_DIR / config.collection_name / config.uploader / config.patient_id
+    injested_patient_path = INGESTED_DIR / config.collection_name / config.uploader / config.patient_id
     os.makedirs(injested_patient_path, exist_ok=True)
     shutil.move(staged_study_path, injested_patient_path)
 

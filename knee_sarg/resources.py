@@ -1,20 +1,17 @@
 import os
 import json
-import datetime
 import tempfile
 from typing import Optional, List
 from pathlib import Path
-import subprocess
 import shutil
 
 import yaml
-import httpx
 import polars as pl
 import pandas as pd
 from dagster import InitResourceContext, ConfigurableResource, get_dagster_logger
 from dagster_duckdb import DuckDBResource
+from dagster_ssh import ssh_resource
 from pydantic import PrivateAttr
-from tenacity import retry, wait_exponential, stop_after_attempt
 from huggingface_hub import HfApi
 import pyarrow.csv as csv
 
@@ -25,7 +22,8 @@ log = get_dagster_logger()
 DBT_PROJECT_DIR = str(Path(__file__).parent.resolve() / ".." / "dbt")
 DATA_DIR = Path(__file__).parent.resolve() / ".." / "data"
 STAGED_DIR = DATA_DIR / "staged"
-INJESTED_DIR = DATA_DIR / "injested"
+OAI_SAMPLED_DIR = STAGED_DIR / "oai" / "dagster"
+INGESTED_DIR = DATA_DIR / "ingested"
 COLLECTIONS_DIR = DATA_DIR / "collections"
 DATABASE_PATH = os.getenv("DATABASE_PATH", str(DATA_DIR / "database.duckdb"))
 
@@ -93,7 +91,7 @@ class OAISampler(ConfigurableResource):
         # Most did not have time point 30
         time_points = [0, 12, 18, 24, 36, 48, 72, 96]
         time_point_folders = ['OAIBaselineImages',] + [f'OAI{m}MonthImages' for m in time_points[1:]]
-        time_point_patients = { tp: set() for tp in time_points }
+        # time_point_patients = { tp: set() for tp in time_points }
 
         # target_patients = [9279291, 9298954, 9003380]
         with open(DATA_DIR / "oai-sampler" / "patients_with_8_time_points.json", 'r') as fp:
@@ -202,45 +200,29 @@ class OAISampler(ConfigurableResource):
                                     with open(staged_study_path / 'patient.json', 'w') as fp:
                                         fp.write(pd.DataFrame({0: row}).to_json())
 
-                                    continue
-
-                                    with open(patient_staged_path / 'study.json', 'w') as fp:
+                                    with open(staged_study_path / 'study.json', 'w') as fp:
                                         fp.write(studies_table.to_json())
 
-                                    with open(patient_staged_path / 'series.json', 'w') as fp:
+                                    with open(staged_study_path / 'series.json', 'w') as fp:
                                         fp.write(series_table.to_json())
 
-                                    nifti_path = patient_staged_path / 'nifti' / series_instance_uid
+                                    nifti_path = staged_study_path / 'nifti' / series_instance_uid
                                     os.makedirs(nifti_path, exist_ok=True)
                                     itk.imwrite(image, nifti_path / 'image.nii.gz')
 
-                                    with open(patient_staged_path / 'study.json', 'w') as fp:
-                                        fp.write(studies_table.to_json())
 
-                                    with open(patient_staged_path / 'series.json', 'w') as fp:
-                                        fp.write(series_table.to_json())
-
-                                    with open(patient_staged_path / 'patient.json', 'w') as fp:
-                                        fp.write(pd.DataFrame({0: row}).to_json())
-                                    continue
-
-                                    # itk_so_enums = itk.SpatialOrientationEnums  # shortens next line
-                                    # dicom_lps = itk_so_enums.ValidCoordinateOrientations_ITK_COORDINATE_ORIENTATION_RAI
-                                    # if image.dtype == np.int32 or image.dtype == np.uint32:
-                                    #     image = image.astype(np.float32)
-                                    # oriented_image = itk.orient_image_filter(image, use_image_direction=False, desired_coordinate_orientation=dicom_lps)
-
-                                    # ngff_image = ngff_zarr.itk_image_to_ngff_image(oriented_image)
-
-                                    # multiscales = ngff_zarr.to_multiscales(ngff_image, chunks=64, method=ngff_zarr.Methods.DASK_IMAGE_GAUSSIAN)
-                                    # ome_zarr_path = Path('ome-zarr') / ds.PatientID / ds.StudyInstanceUID / ds.SeriesInstanceUID
-                                    # os.makedirs(ome_zarr_path, exist_ok=True)
-                                    # ngff_zarr.to_ngff_zarr(ome_zarr_path  / 'image.ome.zarr', multiscales)
 
         pl_df = pl.from_pandas(result)
         print('result')
         print(pl_df)
         return pl_df
+
+ssh_compute = ssh_resource.configured({
+    "remote_host": {"env": "SSH_HOST"},
+    "username": {"env": "SSH_USERNAME"},
+    "password": {"env": "SSH_PASSWORD"},
+})
+
 
 class CollectionPublisher(ConfigurableResource):
     hf_token: str
