@@ -29,7 +29,7 @@ def run_pipeline(ssh_resource, client, study_dir: Path):
     remote_path = f"{remote_in_dir}{file_name}"
     ssh_resource.sftp_put(remote_path, first_image_path)
 
-    log.info(f"Running pipeline")
+    log.info("Running pipeline")
     stdin, stdout, stderr = client.exec_command(f"cd {pipeline_src_dir} && source ./venv/bin/activate && python ./oai_analysis/pipeline.py")
     log.info(stdout.read().decode())
     stderr_output = stderr.read().decode()

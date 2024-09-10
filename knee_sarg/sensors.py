@@ -1,5 +1,4 @@
 import os
-from pathlib import Path
 
 from dagster import define_asset_job, sensor, RunRequest, RunConfig, DefaultSensorStatus
 

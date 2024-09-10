@@ -136,7 +136,6 @@ class OAISampler(ConfigurableResource):
                                 acquisition_id = patient_dir.relative_to(folder)
                                 acquisition_dess = dess_df['Folder'].str.contains(str(acquisition_id))
                                 acquisition_df = dess_df.loc[acquisition_dess, :]
-                                dess_count = 0
                                 patient_id = str(patient)
                                 log.info(f"Fetching images for patient {patient_id}")
 
@@ -147,7 +146,7 @@ class OAISampler(ConfigurableResource):
                                 series_table.astype({'patient_id': 'string', 'study_instance_uid': 'string', 'series_instance_uid': 'string', 'series_number': 'int32', 'modality': 'string', 'body_part_examined': 'string', 'series_description': 'string', 'month': 'int32'})
 
                                 for _, descr in acquisition_df.iterrows():
-                                    is_left = descr['SeriesDescription'].find('LEFT') > -1
+                                    # is_left = descr['SeriesDescription'].find('LEFT') > -1
                                     vol_folder = folder / descr['Folder']
                                     if not vol_folder.exists():
                                         continue

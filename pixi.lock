@@ -2645,7 +2645,7 @@ packages:
   name: knee-sarg
   version: 1.0.0
   path: .
-  sha256: 2012959d99163817b710cbe0a89b52200fa324c4ac99b599a8d1dad55f6785ef
+  sha256: 5843b9cf631ede6af8f04ddd63a9500bb10d11f115956377676ec6e7c528a28e
   requires_dist:
   - dagster-dbt==0.23.16
   - dagster-duckdb-polars==0.23.16
@@ -2663,7 +2663,7 @@ packages:
   - tenacity
   - itk>=5.4.0,<6
   - ngff-zarr[itk,dask-image]>=0.8.7,<0.9
-  - dagster-webserver==1.7.16 ; extra == 'dev'
+  - dagster-webserver ; extra == 'dev'
   - ruff ; extra == 'dev'
   requires_python: '>=3.11,<=3.13'
   editable: true

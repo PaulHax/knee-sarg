@@ -32,7 +32,7 @@ Issues = "https://github.com/open-radiogenomics/knee-sarg/issues"
 CI = "https://github.com/open-radiogenomics/knee-sarg/actions"
 
 [project.optional-dependencies]
-dev = ["dagster-webserver==1.7.16", "ruff"]
+dev = ["dagster-webserver", "ruff"]
 
 [build-system]
 requires = ["setuptools"]
@@ -69,6 +69,7 @@ clean = { cmd = "rm -rf data/*.parquet data/*.duckdb dbt/target dbt/dbt_packages
 
 [tool.pixi.feature.dev.tasks]
 dev = { cmd = "dagster dev", description = "Run the development environment" }
+fix = { cmd = "ruff check . --fix", description = "Run ruff to fix linting issues" }
 
 [tool.pixi.dependencies]
 s5cmd = ">=2.2.2,<3"

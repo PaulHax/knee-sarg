@@ -4,7 +4,6 @@ Staged study data can either come from the OAI or from the web browser portal.
 """
 
 import os
-from pathlib import Path
 import shutil
 
 import pandas as pd

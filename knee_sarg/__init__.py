@@ -1,14 +1,12 @@
-import os
-from pathlib import Path
 
 from dagster import EnvVar, Definitions, load_assets_from_modules, define_asset_job
-from dagster_dbt import DbtCliResource, load_assets_from_dbt_project
+# from dagster_dbt import DbtCliResource, load_assets_from_dbt_project
 from dagster_duckdb_polars import DuckDBPolarsIOManager
 from dagster_duckdb import DuckDBResource
 
 from .assets import huggingface, oai, ingested_study
 from .resources import (
-    DBT_PROJECT_DIR,
+    # DBT_PROJECT_DIR,
     DATABASE_PATH,
     CollectionPublisher,
     CollectionTables,
