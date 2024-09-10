@@ -3,6 +3,7 @@ from dagster import EnvVar, Definitions, load_assets_from_modules, define_asset_
 # from dagster_dbt import DbtCliResource, load_assets_from_dbt_project
 from dagster_duckdb_polars import DuckDBPolarsIOManager
 from dagster_duckdb import DuckDBResource
+from dagster_ssh import SSHResource
 
 from .assets import huggingface, oai, ingested_study
 from .resources import (
@@ -11,7 +12,7 @@ from .resources import (
     CollectionPublisher,
     CollectionTables,
     OAISampler,
-    ssh_compute,
+    OaiPipeline,
 )
 from .sensors import staged_study_sensor, injest_and_analyze_study_job
 
@@ -34,6 +35,7 @@ run_oai_job = define_asset_job(
 )
 jobs = [stage_oai_samples_job, run_oai_job, injest_and_analyze_study_job]
 
+
 resources = {
     # "dbt": dbt,
     "io_manager": DuckDBPolarsIOManager(database=DATABASE_PATH, schema="main"),
@@ -41,7 +43,15 @@ resources = {
     "collection_publisher": CollectionPublisher(hf_token=EnvVar("HUGGINGFACE_TOKEN")),
     "duckdb": duckdb_resource,
     "collection_tables": CollectionTables(duckdb=duckdb_resource),
-    "ssh_compute": ssh_compute,
+    "oai_pipeline": OaiPipeline(
+        pipeline_src_dir=EnvVar("PIPELINE_SRC_DIR"),
+        ssh_connection=SSHResource(
+            remote_host=EnvVar("SSH_HOST"),
+            username=EnvVar("SSH_USERNAME"),
+            password=EnvVar("SSH_PASSWORD"),
+            remote_port=22,
+        ),
+    ),
 }
 
 sensors = [staged_study_sensor]

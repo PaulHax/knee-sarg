@@ -8,9 +8,14 @@ import shutil
 import yaml
 import polars as pl
 import pandas as pd
-from dagster import InitResourceContext, ConfigurableResource, get_dagster_logger
+from dagster import (
+    InitResourceContext,
+    ConfigurableResource,
+    ResourceDependency,
+    get_dagster_logger,
+)
 from dagster_duckdb import DuckDBResource
-from dagster_ssh import ssh_resource
+from dagster_ssh import SSHResource
 from pydantic import PrivateAttr
 from huggingface_hub import HfApi
 import pyarrow.csv as csv
@@ -102,7 +107,7 @@ class OAISampler(ConfigurableResource):
 
     def get_samples(self) -> pl.DataFrame:
         # months
-        time_points = [0, 12, 18, 24, 30, 36, 48, 72, 96]
+        # time_points = [0, 12, 18, 24, 30, 36, 48, 72, 96]
         # Most did not have time point 30
         time_points = [0, 12, 18, 24, 36, 48, 72, 96]
         time_point_folders = [
@@ -346,13 +351,38 @@ class OAISampler(ConfigurableResource):
         return pl_df
 
 
-ssh_compute = ssh_resource.configured(
-    {
-        "remote_host": {"env": "SSH_HOST"},
-        "username": {"env": "SSH_USERNAME"},
-        "password": {"env": "SSH_PASSWORD"},
-    }
-)
+class OaiPipeline(ConfigurableResource):
+    ssh_connection: ResourceDependency[SSHResource]
+    pipeline_src_dir: str
+
+    def run_pipeline(self, study_dir: Path, image_path: Path):
+        with self.ssh_connection.get_connection() as client:
+            remote_in_dir = f"{self.pipeline_src_dir}/in-data/"
+            remote_path = f"{remote_in_dir}{os.path.basename(image_path)}"
+            self.ssh_connection.sftp_put(remote_path, str(image_path))
+
+            log.info("Running pipeline")
+            stdin, stdout, stderr = client.exec_command(
+                f"cd {self.pipeline_src_dir} && source ./venv/bin/activate && python ./oai_analysis/pipeline.py"
+            )
+            log.info(stdout.read().decode())
+            if stderr_output := stderr.read().decode():
+                log.error(stderr_output)
+
+            output_dir = study_dir / "oai_output"
+            output_dir.mkdir(exist_ok=True)
+
+            remote_out_dir = f"{self.pipeline_src_dir}/OAI_results"
+            stdin, stdout, stderr = client.exec_command(f"ls {remote_out_dir}")
+            remote_files = [
+                file
+                for file in stdout.read().decode().splitlines()
+                if file != "in_image.nrrd"
+            ]
+            for remote_file in remote_files:
+                self.ssh_connection.sftp_get(
+                    f"{remote_out_dir}/{remote_file}", str(output_dir / remote_file)
+                )
 
 
 class CollectionPublisher(ConfigurableResource):
