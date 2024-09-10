@@ -22,6 +22,12 @@ jobs:
         with:
           pixi-version: v0.27.1
           cache: true
-      - name: Test staging of sample data
+      - name: Lint
         run: |
-          pixi run stage-samples
+          pixi run lint
+      - name: Check formatting
+        run: |
+          pixi run check-format
+      # - name: Test staging of sample data
+      #   run: |
+      #     pixi run stage-samples
