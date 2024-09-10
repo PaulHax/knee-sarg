@@ -70,6 +70,7 @@ clean = { cmd = "rm -rf data/*.parquet data/*.duckdb dbt/target dbt/dbt_packages
 [tool.pixi.feature.dev.tasks]
 dev = { cmd = "dagster dev", description = "Run the development environment" }
 fix = { cmd = "ruff check . --fix", description = "Run ruff to fix linting issues" }
+format = { cmd = "ruff format", description = "Run ruff to format code" }
 
 [tool.pixi.dependencies]
 s5cmd = ">=2.2.2,<3"

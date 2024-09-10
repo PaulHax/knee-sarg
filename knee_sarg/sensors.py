@@ -14,6 +14,7 @@ injest_and_analyze_study_job = define_asset_job(
     description="Injest a study into a collection and run analysis on it",
 )
 
+
 @sensor(job=injest_and_analyze_study_job, default_status=DefaultSensorStatus.STOPPED)
 def staged_study_sensor(context):
     """
@@ -31,6 +32,15 @@ def staged_study_sensor(context):
                     yield RunRequest(
                         run_key=f"{collection_name}-{uploader}-{patient_id}-{study_id}",
                         run_config=RunConfig(
-                            ops={"ingested_study": {"config": {"collection_name": collection_name, "uploader": uploader, "study_id": study_id , "patient_id": patient_id}}}
+                            ops={
+                                "ingested_study": {
+                                    "config": {
+                                        "collection_name": collection_name,
+                                        "uploader": uploader,
+                                        "study_id": study_id,
+                                        "patient_id": patient_id,
+                                    }
+                                }
+                            }
                         ),
                     )

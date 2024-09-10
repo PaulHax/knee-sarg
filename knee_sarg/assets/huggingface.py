@@ -32,13 +32,16 @@ that improves how communities collaborate on open data to diagnose knee cancer a
 
 
 collections = [
-    (OAI_COLLECTION_NAME, """
+    (
+        OAI_COLLECTION_NAME,
+        """
 ## OAI Radiogenomics
 
 Source: The Osteoarthritis Initiative, https://nda.nih.gov/oai
 
 > The Osteoarthritis Initiative (OAI) is a multi-center, ten-year observational study of men and women, sponsored by the National Institutes of Health (part of the Department of Health and Human Services). The goals of the OAI are to provide resources to enable a better understanding of prevention and treatment of knee osteoarthritis, one of the most common causes of disability in adults.
-"""),
+""",
+    ),
 ]
 
 assets = []
