@@ -43,7 +43,7 @@ def convert_date_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 @asset()
-def injested_study(config: StagedStudyConfig, collection_tables: CollectionTables) -> pl.DataFrame:
+def ingested_study(config: StagedStudyConfig, collection_tables: CollectionTables) -> pl.DataFrame:
     """
     Injested study data.
     """

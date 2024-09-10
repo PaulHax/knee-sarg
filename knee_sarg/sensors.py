@@ -3,13 +3,13 @@ from pathlib import Path
 
 from dagster import define_asset_job, sensor, RunRequest, RunConfig, DefaultSensorStatus
 
-from .assets import injested_study
+from .assets import ingested_study
 from .resources import STAGED_DIR
 
 injest_and_analyze_study_job = define_asset_job(
     "injest_and_analyze_study",
     [
-        injested_study.injested_study,
+        ingested_study.ingested_study,
         # more analysis assets here
     ],
     description="Injest a study into a collection and run analysis on it",
@@ -32,6 +32,6 @@ def staged_study_sensor(context):
                     yield RunRequest(
                         run_key=f"{collection_name}-{uploader}-{patient_id}-{study_id}",
                         run_config=RunConfig(
-                            ops={"injested_study": {"config": {"collection_name": collection_name, "uploader": uploader, "study_id": study_id , "patient_id": patient_id}}}
+                            ops={"ingested_study": {"config": {"collection_name": collection_name, "uploader": uploader, "study_id": study_id , "patient_id": patient_id}}}
                         ),
                     )

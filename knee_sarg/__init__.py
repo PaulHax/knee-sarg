@@ -6,7 +6,7 @@ from dagster_dbt import DbtCliResource, load_assets_from_dbt_project
 from dagster_duckdb_polars import DuckDBPolarsIOManager
 from dagster_duckdb import DuckDBResource
 
-from .assets import huggingface, oai, injested_study
+from .assets import huggingface, oai, ingested_study
 from .resources import (
     DBT_PROJECT_DIR,
     DATABASE_PATH,
@@ -22,7 +22,7 @@ duckdb_resource = DuckDBResource(database=DATABASE_PATH)
 
 # dbt_assets = load_assets_from_dbt_project(DBT_PROJECT_DIR, DBT_PROJECT_DIR)
 dbt_assets = []
-all_assets = load_assets_from_modules([oai, huggingface, injested_study])
+all_assets = load_assets_from_modules([oai, huggingface, ingested_study])
 
 stage_oai_samples_job = define_asset_job("stage_oai_samples", [oai.oai_samples,], description="Stages OAI samples")
 run_oai_job = define_asset_job("run_oai", [oai.oai_samples,oai.thickness_images], description="Run OAI on samples")
