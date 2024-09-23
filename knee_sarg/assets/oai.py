@@ -2,7 +2,6 @@
 
 from typing import List
 from pathlib import Path
-import shutil
 
 import polars as pl
 import pandas as pd
@@ -12,6 +11,7 @@ from dagster import (
     AssetExecutionContext,
     Config,
 )
+from dagster_duckdb import DuckDBResource
 from pydantic import Field
 
 from ..resources import (
@@ -22,7 +22,7 @@ from ..resources import (
 )
 from ..assets.ingested_study import (
     INGESTED_DIR,
-    study_id_partitions_def,
+    study_uid_partitions_def,
     ingested_study,
 )
 
@@ -86,63 +86,77 @@ class ThicknessImages(Config):
 
 
 @asset(
-    partitions_def=study_id_partitions_def,
-    metadata={"partition_expr": "study_id"},
     deps=[ingested_study],
-    op_tags={"gpu": ""},
+    partitions_def=study_uid_partitions_def,
+    metadata={"partition_expr": "study_uid"},
 )
 def cartilage_thickness(
-    context: AssetExecutionContext, config: ThicknessImages, oai_pipeline: OaiPipeline
+    context: AssetExecutionContext,
+    config: ThicknessImages,
+    duckdb: DuckDBResource,
+    oai_pipeline: OaiPipeline,
 ) -> pl.DataFrame:
     """
-    Cartilage Thickness Images. Generates images for a series in data/collections/OAI_COLLECTION_NAME/patient_id/study_id/cartilage_thickness/series_id.
+    Cartilage Thickness Images. Generates images for a series in data/collections/OAI_COLLECTION_NAME/patient_id/study_uid/cartilage_thickness/series_id.
     """
-    study_id = context.partition_key
+    study_uid = context.partition_key
     # gather images we want to run the pipeline on
-    ingested_images_root: str = str(INGESTED_DIR)
-    patient_dirs = [d for d in Path(ingested_images_root).iterdir() if d.is_dir()]
-    study_dirs = [
-        subdir
-        for directory in patient_dirs
-        for subdir in directory.iterdir()
-        if subdir.is_dir()
-    ]
+    ingested_images_root: Path = INGESTED_DIR
 
-    def get_first_file(dir: Path):
-        return str(next((item for item in dir.iterdir() if not item.is_dir()), None))
+    with duckdb.get_connection() as conn:
+        cursor = conn.execute(
+            f"SELECT * FROM {OAI_COLLECTION_NAME}_studies WHERE study_instance_uid = ?",
+            (study_uid,),
+        )
+        row = cursor.fetchone()
+        column_names = [desc[0] for desc in cursor.description]
+        study = dict(zip(column_names, row))
 
-    series_dirs = [
-        {
-            "patient_id": study_dir.parent.name,
-            "study_id": study_dir.name,
-            "series_id": series_dir.name,
-            "study_dir": study_dir,
-            "series_dir": series_dir,
-            "image_path": get_first_file(series_dir),
-        }
-        for study_dir in study_dirs
-        for series_dir in (study_dir / "nifti").iterdir()
-        if series_dir.is_dir()
-    ]
-
-    study = next((item for item in series_dirs if item["study_id"] == study_id), None)
     if not study:
         raise Exception(
-            f"Study with {study_id} not found in dir: {ingested_images_root}"
+            f"Study with uid {study_uid} not found in {OAI_COLLECTION_NAME}_studies table"
         )
 
-    output_dir = make_output_dir(OAI_COLLECTION_NAME, study, "cartilage_thickness")
-    computed_files_dir = output_dir / "cartilage_thickness"
-    if computed_files_dir.exists():
-        shutil.rmtree(computed_files_dir)
+    with duckdb.get_connection() as conn:
+        cursor = conn.execute(
+            f"""
+            SELECT 
+            *
+            FROM {OAI_COLLECTION_NAME}_series
+            WHERE study_instance_uid = ?
+            """,
+            (study_uid,),
+        )
+        column_names = [desc[0] for desc in cursor.description]
+        row = cursor.fetchone()
+        series = dict(zip(column_names, row))
+        # all_series = pd.DataFrame(series, columns=column_names)
 
-    oai_pipeline.run_pipeline(study["image_path"], str(computed_files_dir), study_id)
+    series_dir_info = {
+        "patient": study["patient_id"],
+        "study": str(study["study_date"]),
+        "series": series["series_description"],
+    }
+    output_dir = make_output_dir(
+        OAI_COLLECTION_NAME, series_dir_info, "cartilage_thickness"
+    )
+
+    image_path = (
+        ingested_images_root
+        / study["patient_id"]
+        / study_uid
+        / "nifti"
+        / series["series_instance_uid"]
+        / "image.nii.gz"
+    )
+
+    oai_pipeline.run_pipeline(str(image_path), str(output_dir), study_uid)
 
     # Check if specific files are in computed_files_dir
     missing_files = [
         file
         for file in config.required_output_files
-        if not (computed_files_dir / file).exists()
+        if not (output_dir / file).exists()
     ]
 
     if missing_files:
@@ -155,15 +169,15 @@ def cartilage_thickness(
             [
                 {
                     "patient_id": study["patient_id"],
-                    "study_id": study["study_id"],
-                    "series_id": study["series_id"],
-                    "computed_files_dir": str(computed_files_dir),
+                    "study_uid": study_uid,
+                    "series_id": series["series_instance_uid"],
+                    "computed_files_dir": str(output_dir),
                 }
             ]
         ).astype(
             {
                 "patient_id": "str",
-                "study_id": "str",
+                "study_uid": "str",
                 "series_id": "str",
                 "computed_files_dir": "str",
             }

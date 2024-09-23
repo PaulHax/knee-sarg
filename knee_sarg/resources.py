@@ -319,20 +319,18 @@ class OAISampler(ConfigurableResource):
         return result
 
 
-def make_output_dir(collection: str, series_info: SeriesInfo, analysis_name: str):
-    patient_id, study_id, series_id = (
-        series_info["patient_id"],
-        series_info["study_id"],
-        series_info["series_id"],
+def make_output_dir(collection: str, dir_info: SeriesInfo, analysis_name: str):
+    patient, study, series = (
+        dir_info["patient"],
+        dir_info["study"],
+        dir_info["series"],
     )
+    study_dir = COLLECTIONS_DIR / collection / patient / study
+    output_dir = study_dir / analysis_name / series
 
-    study_dir = COLLECTIONS_DIR / collection / patient_id / study_id
-
-    output_dir = study_dir / analysis_name / series_id
+    if output_dir.exists():
+        shutil.rmtree(output_dir)
     os.makedirs(output_dir, exist_ok=True)
-
-    for json_file in series_info["study_dir"].glob("*.json"):
-        shutil.copy(json_file, study_dir)
 
     return output_dir
 
