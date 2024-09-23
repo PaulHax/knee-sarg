@@ -8,7 +8,7 @@ import shutil
 
 import pandas as pd
 import polars as pl
-from dagster import asset, get_dagster_logger, Config
+from dagster import asset, get_dagster_logger, Config, DynamicPartitionsDefinition
 import numpy as np
 from slugify import slugify
 
@@ -18,6 +18,9 @@ import itk
 from ..resources import STAGED_DIR, INGESTED_DIR, COLLECTIONS_DIR, CollectionTables
 
 log = get_dagster_logger()
+
+
+study_id_partitions_def = DynamicPartitionsDefinition(name="series_id")
 
 
 class StagedStudyConfig(Config):
@@ -30,7 +33,18 @@ class StagedStudyConfig(Config):
 
 
 def config_to_dataframe(config: StagedStudyConfig) -> pd.DataFrame:
-    return pl.from_pandas(pd.DataFrame([config]))
+    return pl.from_pandas(
+        pd.DataFrame(
+            [
+                {
+                    "collection_name": config.collection_name,
+                    "uploader": config.uploader,
+                    "patient_id": config.patient_id,
+                    "study_id": config.study_id,
+                }
+            ]
+        )
+    )
 
 
 def clean_column_name(name: str | int) -> str:
@@ -49,7 +63,7 @@ def convert_date_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-@asset()
+@asset(partitions_def=study_id_partitions_def, metadata={"partition_expr": "study_id"})
 def ingested_study(
     config: StagedStudyConfig, collection_tables: CollectionTables
 ) -> pl.DataFrame:
@@ -121,19 +135,13 @@ def ingested_study(
                 collection_ome_zarr_path / "image.ome.zarr", multiscales
             )
 
-    staged_study_path = (
-        STAGED_DIR
-        / config.collection_name
-        / config.uploader
-        / config.patient_id
-        / config.study_id
-    )
-    injested_patient_path = (
-        INGESTED_DIR / config.collection_name / config.uploader / config.patient_id
-    )
-    os.makedirs(injested_patient_path, exist_ok=True)
-    shutil.move(staged_study_path, injested_patient_path)
+    ingested_patient_path = INGESTED_DIR / config.patient_id
+    os.makedirs(ingested_patient_path, exist_ok=True)
+    ingested_study_path = ingested_patient_path / config.study_id
+    if ingested_study_path.exists():
+        shutil.rmtree(ingested_study_path)
 
+    shutil.move(staged_study_path, ingested_patient_path)
     return config_to_dataframe(config)
 
 

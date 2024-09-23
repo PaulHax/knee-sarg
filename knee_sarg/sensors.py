@@ -6,10 +6,11 @@ from dagster import (
     RunRequest,
     RunConfig,
     DefaultSensorStatus,
+    SensorResult,
 )
 
-from .assets import ingested_study
-from .assets.oai import oai_samples, oai_patient_ids
+from .assets.ingested_study import ingested_study, study_id_partitions_def
+from .assets.oai import oai_samples, oai_patient_ids, cartilage_thickness
 from .resources import STAGED_DIR
 
 
@@ -25,11 +26,10 @@ stage_oai_samples_job = define_asset_job(
 
 ingest_and_analyze_study_job = define_asset_job(
     "ingest_and_analyze_study",
-    [
-        ingested_study.ingested_study,
-        # more analysis assets here
-    ],
+    [ingested_study, cartilage_thickness],
     description="Ingest a study into a collection and run analysis on it",
+    partitions_def=study_id_partitions_def,
+    tags={"job": "gpu"},
 )
 
 
@@ -38,6 +38,8 @@ def staged_study_sensor(context):
     """
     Sensor that triggers when a study is staged.
     """
+    run_requests = []
+    partitions_to_add = []
     for collection_name in os.listdir(STAGED_DIR):
         collection_path = STAGED_DIR / collection_name
         if not os.path.isdir(collection_path):
@@ -47,8 +49,9 @@ def staged_study_sensor(context):
             for patient_id in os.listdir(uploader_path):
                 patient_path = uploader_path / patient_id
                 for study_id in os.listdir(patient_path):
-                    yield RunRequest(
+                    run = RunRequest(
                         run_key=f"{collection_name}-{uploader}-{patient_id}-{study_id}",
+                        partition_key=study_id,
                         run_config=RunConfig(
                             ops={
                                 "ingested_study": {
@@ -58,7 +61,15 @@ def staged_study_sensor(context):
                                         "study_id": study_id,
                                         "patient_id": patient_id,
                                     }
-                                }
-                            }
+                                },
+                            },
                         ),
                     )
+                    run_requests.append(run)
+                    partitions_to_add.append(study_id)
+    return SensorResult(
+        run_requests=run_requests,
+        dynamic_partitions_requests=[
+            study_id_partitions_def.build_add_request(partitions_to_add)
+        ],
+    )

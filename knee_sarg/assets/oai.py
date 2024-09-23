@@ -2,13 +2,13 @@
 
 from typing import List
 from pathlib import Path
+import shutil
 
 import polars as pl
 import pandas as pd
 from dagster import (
     asset,
     get_dagster_logger,
-    DynamicPartitionsDefinition,
     AssetExecutionContext,
     Config,
 )
@@ -16,15 +16,17 @@ from pydantic import Field
 
 from ..resources import (
     OAISampler,
-    OAI_SAMPLED_DIR,
     OaiPipeline,
     make_output_dir,
     OAI_COLLECTION_NAME,
 )
+from ..assets.ingested_study import (
+    INGESTED_DIR,
+    study_id_partitions_def,
+    ingested_study,
+)
 
 log = get_dagster_logger()
-
-series_id_partitions_def = DynamicPartitionsDefinition(name="series_id")
 
 
 class OaiPatientIds(Config):
@@ -84,20 +86,21 @@ class ThicknessImages(Config):
 
 
 @asset(
-    partitions_def=series_id_partitions_def,
-    metadata={"partition_expr": "series_id"},
+    partitions_def=study_id_partitions_def,
+    metadata={"partition_expr": "study_id"},
+    deps=[ingested_study],
     op_tags={"gpu": ""},
 )
-def thickness_images(
+def cartilage_thickness(
     context: AssetExecutionContext, config: ThicknessImages, oai_pipeline: OaiPipeline
 ) -> pl.DataFrame:
     """
-    Thickness Images. Generates thickness image for a series in data/collections/OAI_COLLECTION_NAME/patient_id/study_id/series_id.
+    Cartilage Thickness Images. Generates images for a series in data/collections/OAI_COLLECTION_NAME/patient_id/study_id/cartilage_thickness/series_id.
     """
-    series_id = context.partition_key
+    study_id = context.partition_key
     # gather images we want to run the pipeline on
-    staged_images_root: str = str(OAI_SAMPLED_DIR)
-    patient_dirs = [d for d in Path(staged_images_root).iterdir() if d.is_dir()]
+    ingested_images_root: str = str(INGESTED_DIR)
+    patient_dirs = [d for d in Path(ingested_images_root).iterdir() if d.is_dir()]
     study_dirs = [
         subdir
         for directory in patient_dirs
@@ -105,10 +108,8 @@ def thickness_images(
         if subdir.is_dir()
     ]
 
-    def get_first_file(series_dir: Path):
-        return str(
-            next((item for item in series_dir.iterdir() if not item.is_dir()), None)
-        )
+    def get_first_file(dir: Path):
+        return str(next((item for item in dir.iterdir() if not item.is_dir()), None))
 
     series_dirs = [
         {
@@ -124,27 +125,25 @@ def thickness_images(
         if series_dir.is_dir()
     ]
 
-    series = next(
-        (item for item in series_dirs if item["series_id"] == series_id), None
-    )
-    if not series:
+    study = next((item for item in series_dirs if item["study_id"] == study_id), None)
+    if not study:
         raise Exception(
-            f"Series {series_id} not found in staging dir: {staged_images_root}"
+            f"Study with {study_id} not found in dir: {ingested_images_root}"
         )
 
-    output_dir = make_output_dir(OAI_COLLECTION_NAME, series)
+    output_dir = make_output_dir(OAI_COLLECTION_NAME, study, "cartilage_thickness")
     computed_files_dir = output_dir / "cartilage_thickness"
+    if computed_files_dir.exists():
+        shutil.rmtree(computed_files_dir)
 
-    # todo surface errors in remote compute and check output
-    oai_pipeline.run_pipeline(series["image_path"], str(computed_files_dir), series_id)
+    oai_pipeline.run_pipeline(study["image_path"], str(computed_files_dir), study_id)
 
     # Check if specific files are in computed_files_dir
-    expected_files = ["thickness_FC.png", "thickness_TC.png"]
-    missing_files = []
-    for file in expected_files:
-        file_path = computed_files_dir / file
-        if not file_path.exists():
-            missing_files.append(file)
+    missing_files = [
+        file
+        for file in config.required_output_files
+        if not (computed_files_dir / file).exists()
+    ]
 
     if missing_files:
         raise Exception(
@@ -155,9 +154,9 @@ def thickness_images(
         pd.DataFrame(
             [
                 {
-                    "patient_id": series["patient_id"],
-                    "study_id": series["study_id"],
-                    "series_id": series["series_id"],
+                    "patient_id": study["patient_id"],
+                    "study_id": study["study_id"],
+                    "series_id": study["series_id"],
                     "computed_files_dir": str(computed_files_dir),
                 }
             ]

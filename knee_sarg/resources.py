@@ -6,7 +6,6 @@ import shutil
 import json
 
 import yaml
-import polars as pl
 import pandas as pd
 from dagster import (
     InitResourceContext,
@@ -320,17 +319,20 @@ class OAISampler(ConfigurableResource):
         return result
 
 
-def make_output_dir(collection: str, series_info: SeriesInfo):
+def make_output_dir(collection: str, series_info: SeriesInfo, analysis_name: str):
     patient_id, study_id, series_id = (
         series_info["patient_id"],
         series_info["study_id"],
         series_info["series_id"],
     )
-    output_dir = COLLECTIONS_DIR / collection / patient_id / study_id / series_id
+
+    study_dir = COLLECTIONS_DIR / collection / patient_id / study_id
+
+    output_dir = study_dir / analysis_name / series_id
     os.makedirs(output_dir, exist_ok=True)
 
     for json_file in series_info["study_dir"].glob("*.json"):
-        shutil.copy(json_file, output_dir)
+        shutil.copy(json_file, study_dir)
 
     return output_dir
 

@@ -3,5 +3,6 @@ run_coordinator:
     class: QueuedRunCoordinator
     config:
         tag_concurrency_limits:
-            - key: "gpu"
+            - key: "job"
+              value: "gpu"
               limit: 2
