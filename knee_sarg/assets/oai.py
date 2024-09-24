@@ -19,6 +19,7 @@ from ..resources import (
     OaiPipeline,
     make_output_dir,
     OAI_COLLECTION_NAME,
+    CartilageThicknessTable,
 )
 from ..assets.ingested_study import (
     INGESTED_DIR,
@@ -183,3 +184,19 @@ def cartilage_thickness(
             }
         )
     )
+
+
+@asset(
+    partitions_def=study_uid_partitions_def,
+)
+def cartilage_thickness_runs(
+    cartilage_thickness: pl.DataFrame,
+    cartilage_thickness_table: CartilageThicknessTable,
+) -> None:
+    """
+    Cartilage Thickness Run Statuses. Parquet table holding the status of cartilage thickness runs.
+    Saved in data/collections/OAI_COLLECTION_NAME/cartilage_thickness_runs.parquet.
+    """
+    run = cartilage_thickness.to_pandas()
+    cartilage_thickness_table.insert_run(run)
+    cartilage_thickness_table.write_incremental_parquet(run)

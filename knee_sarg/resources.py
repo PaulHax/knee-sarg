@@ -72,7 +72,7 @@ class CollectionTables(ConfigurableResource):
                                 f"CREATE TABLE IF NOT EXISTS {table_name} (patient_id VARCHAR, study_instance_uid VARCHAR, series_instance_uid VARCHAR, series_number BIGINT, modality VARCHAR, body_part_examined VARCHAR, series_description VARCHAR);"
                             )
 
-    def teardown_after_execution(self, context: InitResourceContext) -> None:
+    def teardown_after_execution(self, _: InitResourceContext) -> None:
         with self._db.get_connection() as conn:
             conn.execute("VACUUM")
 
@@ -99,6 +99,59 @@ class CollectionTables(ConfigurableResource):
 
         with self._db.get_connection() as conn:
             conn.execute(f"INSERT INTO {collection_name}_{table_name} SELECT * FROM df")
+
+
+class CartilageThicknessTable(ConfigurableResource):
+    duckdb: DuckDBResource
+    name: str = "cartilage_thickness_runs"
+    collection_name: str = OAI_COLLECTION_NAME
+
+    def setup_for_execution(self, _: InitResourceContext) -> None:
+        collection_path = COLLECTIONS_DIR / self.collection_name
+        os.makedirs(collection_path, exist_ok=True)
+        self._table_path = collection_path / f"{self.name}.parquet"
+        self._table_name = f"{self.collection_name}_{self.name}"
+
+        self._db = self.duckdb
+
+        with self._db.get_connection() as conn:
+            if self._table_path.exists():
+                conn.execute(
+                    f"CREATE TABLE IF NOT EXISTS {self._table_name} AS SELECT * FROM parquet_scan('{self._table_path}')"
+                )
+            else:
+                conn.execute(
+                    f"CREATE TABLE IF NOT EXISTS {self._table_name} (patient_id VARCHAR, study_uid VARCHAR, series_id VARCHAR, computed_files_dir VARCHAR);"
+                )
+
+    def teardown_after_execution(self, _: InitResourceContext) -> None:
+        with self._db.get_connection() as conn:
+            conn.execute("VACUUM")
+
+    def insert_run(self, df: pd.DataFrame):
+        if df.empty:
+            return
+        with self._db.get_connection() as conn:
+            conn.execute(f"INSERT INTO {self._table_name} SELECT * FROM df")
+
+    def write_incremental_parquet(self, df: pd.DataFrame):
+        if df.empty:
+            return
+
+        if self._table_path.exists():
+            existing_df = pd.read_parquet(self._table_path)
+            df = pd.concat([existing_df, df])
+
+        df.to_parquet(self._table_path, index=False)
+
+    # def write_parquets(self):
+    #     with self._db.get_connection() as conn:
+    #         collection_name = self.collection_name
+    #         collection_path = COLLECTIONS_DIR / collection_name
+    #         table_parquet = collection_path / f"{self.name}.parquet"
+    #         conn.execute(
+    #             f"COPY {self.table_name} TO '{table_parquet}' (FORMAT 'parquet')"
+    #         )
 
 
 class OAISampler(ConfigurableResource):

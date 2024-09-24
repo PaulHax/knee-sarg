@@ -17,6 +17,7 @@ from .resources import (
     CollectionTables,
     OAISampler,
     OaiPipeline,
+    CartilageThicknessTable,
 )
 from .jobs import (
     ingest_and_analyze_study_job,
@@ -31,7 +32,7 @@ duckdb_resource = DuckDBResource(database=DATABASE_PATH)
 
 # dbt_assets = load_assets_from_dbt_project(DBT_PROJECT_DIR, DBT_PROJECT_DIR)
 dbt_assets = []
-all_assets = load_assets_from_modules([oai, huggingface, ingested_study])
+all_assets = load_assets_from_modules([oai, ingested_study, huggingface])
 
 
 jobs = [
@@ -57,6 +58,7 @@ resources = {
             remote_port=22,
         ),
     ),
+    "cartilage_thickness_table": CartilageThicknessTable(duckdb=duckdb_resource),
 }
 
 sensors = [staged_study_sensor]
