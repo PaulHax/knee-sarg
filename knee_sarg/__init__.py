@@ -18,10 +18,12 @@ from .resources import (
     OAISampler,
     OaiPipeline,
 )
-from .sensors import (
-    staged_study_sensor,
+from .jobs import (
     ingest_and_analyze_study_job,
     stage_oai_samples_job,
+)
+from .sensors import (
+    staged_study_sensor,
 )
 
 # dbt = DbtCliResource(project_dir=DBT_PROJECT_DIR, profiles_dir=DBT_PROJECT_DIR)
