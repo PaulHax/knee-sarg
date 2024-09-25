@@ -133,13 +133,12 @@ def cartilage_thickness(
         series = dict(zip(column_names, row))
         # all_series = pd.DataFrame(series, columns=column_names)
 
-    series_dir_info = {
+    study_dir_info = {
         "patient": study["patient_id"],
-        "study": str(study["study_date"]),
-        "series": series["series_description"],
+        "study": study["study_description"],
     }
     output_dir = make_output_dir(
-        OAI_COLLECTION_NAME, series_dir_info, "cartilage_thickness"
+        OAI_COLLECTION_NAME, study_dir_info, "cartilage_thickness"
     )
 
     image_path = (

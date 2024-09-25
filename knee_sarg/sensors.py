@@ -29,8 +29,13 @@ def staged_study_sensor(context):
             for patient_id in os.listdir(uploader_path):
                 patient_path = uploader_path / patient_id
                 for study_uid in os.listdir(patient_path):
+                    study_uid_path = patient_path / study_uid
+                    last_modified_time = max(
+                        os.path.getmtime(os.path.join(study_uid_path, f))
+                        for f in os.listdir(study_uid_path)
+                    )
                     run = RunRequest(
-                        run_key=f"{collection_name}-{uploader}-{patient_id}-{study_uid}",
+                        run_key=f"{collection_name}-{uploader}-{patient_id}-{study_uid}-{last_modified_time}",
                         partition_key=study_uid,
                         run_config=RunConfig(
                             ops={

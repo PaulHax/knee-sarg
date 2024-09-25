@@ -35,7 +35,7 @@ OAI_COLLECTION_NAME = "oai"
 
 collection_table_names = {"patients", "studies", "series"}
 
-SeriesInfo = Dict[str, Any]
+StudyInfo = Dict[str, Any]
 
 
 class CollectionTables(ConfigurableResource):
@@ -372,14 +372,13 @@ class OAISampler(ConfigurableResource):
         return result
 
 
-def make_output_dir(collection: str, dir_info: SeriesInfo, analysis_name: str):
-    patient, study, series = (
+def make_output_dir(collection: str, dir_info: StudyInfo, analysis_name: str):
+    patient, study = (
         dir_info["patient"],
         dir_info["study"],
-        dir_info["series"],
     )
     study_dir = COLLECTIONS_DIR / collection / patient / study
-    output_dir = study_dir / analysis_name / series
+    output_dir = study_dir / analysis_name
 
     if output_dir.exists():
         shutil.rmtree(output_dir)

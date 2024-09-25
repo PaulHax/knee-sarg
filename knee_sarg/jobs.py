@@ -27,3 +27,11 @@ ingest_and_analyze_study_job = define_asset_job(
     partitions_def=study_uid_partitions_def,
     tags={"job": "gpu"},
 )
+
+cartilage_thickness_job = define_asset_job(
+    "cartilage_thickness_job",
+    [cartilage_thickness, cartilage_thickness_runs],
+    description="Run cartilage thickness analysis",
+    partitions_def=study_uid_partitions_def,
+    tags={"job": "gpu"},
+)

@@ -22,6 +22,7 @@ from .resources import (
 from .jobs import (
     ingest_and_analyze_study_job,
     stage_oai_samples_job,
+    cartilage_thickness_job,
 )
 from .sensors import (
     staged_study_sensor,
@@ -38,6 +39,7 @@ all_assets = load_assets_from_modules([oai, ingested_study, huggingface])
 jobs = [
     stage_oai_samples_job,
     ingest_and_analyze_study_job,
+    cartilage_thickness_job,
 ]
 
 
