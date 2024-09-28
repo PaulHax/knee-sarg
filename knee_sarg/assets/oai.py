@@ -10,6 +10,7 @@ from dagster import (
     get_dagster_logger,
     AssetExecutionContext,
     Config,
+    DynamicPartitionsDefinition,
 )
 from dagster_duckdb import DuckDBResource
 from pydantic import Field
@@ -29,8 +30,10 @@ from ..assets.ingested_study import (
 
 log = get_dagster_logger()
 
+oai_patient_id_partitions_def = DynamicPartitionsDefinition(name="oai_patient_id")
 
-class OaiPatientIds(Config):
+
+class OaiPatientIdsConfig(Config):
     patient_id_file: str = Field(
         default_factory=lambda: "patient_small.json",
         description="JSON file with array of patient IDs",
@@ -40,7 +43,7 @@ class OaiPatientIds(Config):
 @asset()
 def oai_patient_ids(
     oai_sampler: OAISampler,
-    config: OaiPatientIds,
+    config: OaiPatientIdsConfig,
 ) -> pl.DataFrame:
     """
     OAI Patient IDs.
@@ -77,6 +80,18 @@ def oai_samples(
         ignore_index=True,
     )
     return pl.from_pandas(all_series)
+
+
+@asset(partitions_def=oai_patient_id_partitions_def)
+def oai_sample(
+    context: AssetExecutionContext,
+    oai_sampler: OAISampler,
+) -> None:
+    """
+    OAI Sample by patient_id partition. Samples are placed in data/staged/oai/dagster/.
+    """
+    patient_id = context.partition_key
+    oai_sampler.get_samples(patient_id)
 
 
 class ThicknessImages(Config):

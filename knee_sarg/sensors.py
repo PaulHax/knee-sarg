@@ -6,15 +6,17 @@ from dagster import (
     RunConfig,
     DefaultSensorStatus,
     SensorResult,
+    SensorEvaluationContext,
 )
 
 from .assets.ingested_study import study_uid_partitions_def
-from .resources import STAGED_DIR
-from .jobs import ingest_and_analyze_study_job
+from .assets.oai import oai_patient_id_partitions_def
+from .resources import STAGED_DIR, OAISampler
+from .jobs import ingest_and_analyze_study_job, stage_oai_sample_job
 
 
 @sensor(job=ingest_and_analyze_study_job, default_status=DefaultSensorStatus.RUNNING)
-def staged_study_sensor(context):
+def staged_study_sensor(context: SensorEvaluationContext):
     """
     Sensor that triggers when a study is staged.
     """
@@ -56,5 +58,41 @@ def staged_study_sensor(context):
         run_requests=run_requests,
         dynamic_partitions_requests=[
             study_uid_partitions_def.build_add_request(partitions_to_add)
+        ],
+    )
+
+
+@sensor(
+    job=stage_oai_sample_job,
+    default_status=DefaultSensorStatus.RUNNING,
+)
+def patient_id_sensor(context: SensorEvaluationContext, oai_sampler: OAISampler):
+    """
+    Watches JSON file for Patient IDs, then creates patient_id partitions and runs oai_sample,
+    only for IDs not already processed (stored in context.cursor).
+    Using the cursor instead of run_id so folks can clear the cursor in the GUI.
+    """
+    import json
+
+    cursor_ids = json.loads(context.cursor) if context.cursor else []
+
+    # check for new patient IDs
+    ids = oai_sampler.get_patient_ids()
+    new_ids = [id for id in ids if id not in cursor_ids]
+
+    run_requests = [
+        RunRequest(
+            partition_key=id,
+        )
+        for id in new_ids
+    ]
+
+    cursor_ids.extend(new_ids)
+    context.update_cursor(json.dumps(cursor_ids))
+
+    return SensorResult(
+        run_requests=run_requests,
+        dynamic_partitions_requests=[
+            oai_patient_id_partitions_def.build_add_request(new_ids)
         ],
     )

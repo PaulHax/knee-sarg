@@ -144,19 +144,11 @@ class CartilageThicknessTable(ConfigurableResource):
 
         df.to_parquet(self._table_path, index=False)
 
-    # def write_parquets(self):
-    #     with self._db.get_connection() as conn:
-    #         collection_name = self.collection_name
-    #         collection_path = COLLECTIONS_DIR / collection_name
-    #         table_parquet = collection_path / f"{self.name}.parquet"
-    #         conn.execute(
-    #             f"COPY {self.table_name} TO '{table_parquet}' (FORMAT 'parquet')"
-    #         )
-
 
 class OAISampler(ConfigurableResource):
     # directory with OAI data as provided by the OAI
     oai_data_root: str
+    patient_ids_file: str = str(DATA_DIR / "oai-sampler" / "patient_ids.json")
 
     def get_time_point_folders(self) -> Dict[int, str]:
         # months
@@ -169,8 +161,8 @@ class OAISampler(ConfigurableResource):
         }
         return time_point_folders
 
-    def get_patient_ids(self, target_patient_file: str) -> List[str]:
-        with open(DATA_DIR / "oai-sampler" / target_patient_file, "r") as fp:
+    def get_patient_ids(self) -> List[str]:
+        with open(self.patient_ids_file, "r") as fp:
             target_patients = json.load(fp)
         return target_patients
 
