@@ -23,12 +23,9 @@ import itk
 
 log = get_dagster_logger()
 
+# Dagster working state
 DBT_PROJECT_DIR = str(Path(__file__).parent.resolve() / ".." / "dbt")
 DATA_DIR = Path(__file__).parent.resolve() / ".." / "data"
-STAGED_DIR = DATA_DIR / "staged"
-OAI_SAMPLED_DIR = STAGED_DIR / "oai" / "dagster"
-INGESTED_DIR = DATA_DIR / "ingested"
-COLLECTIONS_DIR = DATA_DIR / "collections"
 DATABASE_PATH = os.getenv("DATABASE_PATH", str(DATA_DIR / "database.duckdb"))
 
 OAI_COLLECTION_NAME = "oai"
@@ -38,17 +35,63 @@ collection_table_names = {"patients", "studies", "series"}
 StudyInfo = Dict[str, Any]
 
 
+class FileStorage(ConfigurableResource):
+    root_dir: str = str(DATA_DIR)
+    staged_dir: str = ""
+    ingested_dir: str = ""
+    collections_dir: str = ""
+
+    def setup_for_execution(self, context: InitResourceContext) -> None:
+        root = Path(self.root_dir)
+        self._staged_path = (
+            Path(self.staged_dir) if self.staged_dir else root / "staged"
+        )
+        self._ingested_path = (
+            Path(self.ingested_dir) if self.ingested_dir else root / "ingested"
+        )
+        self._collections_path = (
+            Path(self.collections_dir) if self.collections_dir else root / "collections"
+        )
+
+    @property
+    def staged_path(self) -> Path:
+        return self._staged_path
+
+    @property
+    def ingested_path(self) -> Path:
+        return self._ingested_path
+
+    @property
+    def collections_path(self) -> Path:
+        return self._collections_path
+
+    def make_output_dir(self, collection: str, dir_info: StudyInfo, analysis_name: str):
+        patient, study = (
+            dir_info["patient"],
+            dir_info["study"],
+        )
+        study_dir = self.collections_path / collection / patient / study
+        output_dir = study_dir / analysis_name
+
+        if output_dir.exists():
+            shutil.rmtree(output_dir)
+        os.makedirs(output_dir, exist_ok=True)
+
+        return output_dir
+
+
 class CollectionTables(ConfigurableResource):
-    duckdb: DuckDBResource
+    duckdb: ResourceDependency[DuckDBResource]
+    file_storage: ResourceDependency[FileStorage]
     collection_names: List[str] = [OAI_COLLECTION_NAME]
 
     def setup_for_execution(self, context: InitResourceContext) -> None:
-        os.makedirs(COLLECTIONS_DIR, exist_ok=True)
+        os.makedirs(self.file_storage.collections_path, exist_ok=True)
         self._db = self.duckdb
 
         with self._db.get_connection() as conn:
             for collection_name in self.collection_names:
-                collection_path = COLLECTIONS_DIR / collection_name
+                collection_path = self.file_storage.collections_path / collection_name
                 os.makedirs(collection_path, exist_ok=True)
 
                 for table in collection_table_names:
@@ -79,7 +122,7 @@ class CollectionTables(ConfigurableResource):
     def write_collection_parquets(self):
         with self._db.get_connection() as conn:
             for collection_name in self.collection_names:
-                collection_path = COLLECTIONS_DIR / collection_name
+                collection_path = self.file_storage.collections_path / collection_name
                 for table in collection_table_names:
                     table_name = f"{collection_name}_{table}"
                     table_parquet = collection_path / f"{table}.parquet"
@@ -103,11 +146,12 @@ class CollectionTables(ConfigurableResource):
 
 class CartilageThicknessTable(ConfigurableResource):
     duckdb: DuckDBResource
+    file_storage: FileStorage
     name: str = "cartilage_thickness_runs"
     collection_name: str = OAI_COLLECTION_NAME
 
     def setup_for_execution(self, _: InitResourceContext) -> None:
-        collection_path = COLLECTIONS_DIR / self.collection_name
+        collection_path = self.file_storage.collections_path / self.collection_name
         os.makedirs(collection_path, exist_ok=True)
         self._table_path = collection_path / f"{self.name}.parquet"
         self._table_name = f"{self.collection_name}_{self.name}"
@@ -148,6 +192,7 @@ class CartilageThicknessTable(ConfigurableResource):
 class OAISampler(ConfigurableResource):
     # directory with OAI data as provided by the OAI
     oai_data_root: str
+    file_storage: ResourceDependency[FileStorage]
     patient_ids_file: str = str(DATA_DIR / "oai-sampler" / "patient_ids.json")
 
     def get_time_point_folders(self) -> Dict[int, str]:
@@ -162,6 +207,8 @@ class OAISampler(ConfigurableResource):
         return time_point_folders
 
     def get_patient_ids(self) -> List[str]:
+        if not os.path.exists(self.patient_ids_file):
+            return []
         with open(self.patient_ids_file, "r") as fp:
             target_patients = json.load(fp)
         return target_patients
@@ -271,9 +318,8 @@ class OAISampler(ConfigurableResource):
                             }
                         )
 
-                        for _, descr in acquisition_df.iterrows():
-                            # is_left = descr['SeriesDescription'].find('LEFT') > -1
-                            vol_folder = folder / descr["Folder"]
+                        for _, description in acquisition_df.iterrows():
+                            vol_folder = folder / description["Folder"]
                             if not vol_folder.exists():
                                 continue
                             frame_0 = itk.imread(vol_folder / os.listdir(vol_folder)[0])
@@ -286,7 +332,7 @@ class OAISampler(ConfigurableResource):
                             log.info(f"Series Instance UID: {series_instance_uid}")
 
                             output_dir = (
-                                STAGED_DIR
+                                self.file_storage.staged_path
                                 / "oai"
                                 / "dagster"
                                 / str(patient_id)
@@ -325,20 +371,13 @@ class OAISampler(ConfigurableResource):
                             }
 
                             staged_study_path = (
-                                STAGED_DIR
+                                self.file_storage.staged_path
                                 / OAI_COLLECTION_NAME
                                 / "dagster"
                                 / patient_id
                                 / study_instance_uid
                             )
 
-                            # print(
-                            #     "patients_df",
-                            #     patients_df.loc[
-                            #         patients_df["patient_id"] == int(patient)
-                            #     ],
-                            # )
-                            # print(patients_df["patient_id"].head())
                             row = patients_df.loc[
                                 patients_df["patient_id"] == int(patient_id)
                             ].iloc[0]
@@ -362,21 +401,6 @@ class OAISampler(ConfigurableResource):
                             itk.imwrite(image, nifti_path / "image.nii.gz")
 
         return result
-
-
-def make_output_dir(collection: str, dir_info: StudyInfo, analysis_name: str):
-    patient, study = (
-        dir_info["patient"],
-        dir_info["study"],
-    )
-    study_dir = COLLECTIONS_DIR / collection / patient / study
-    output_dir = study_dir / analysis_name
-
-    if output_dir.exists():
-        shutil.rmtree(output_dir)
-    os.makedirs(output_dir, exist_ok=True)
-
-    return output_dir
 
 
 point_to_tbb_in_user_space = "export LD_LIBRARY_PATH=$HOME/oneapi-tbb-2021.5.0/lib/intel64/gcc4.8:$LD_LIBRARY_PATH"
@@ -434,6 +458,7 @@ class OaiPipeline(ConfigurableResource):
 
 
 class CollectionPublisher(ConfigurableResource):
+    file_storage: ResourceDependency[FileStorage]
     hf_token: str
     tmp_dir: str = tempfile.gettempdir()
 
@@ -446,10 +471,10 @@ class CollectionPublisher(ConfigurableResource):
         self,
         collection_name: str,
         readme: Optional[str] = None,
-        generate_datapackage: bool = False,
+        generate_data_package: bool = False,
     ):
         with tempfile.TemporaryDirectory(dir=self.tmp_dir) as temp_dir:
-            collection_path = COLLECTIONS_DIR / collection_name
+            collection_path = self.file_storage.collections_path / collection_name
             log.info(f"Copying collection {collection_name} to {temp_dir}")
             shutil.copytree(collection_path, temp_dir, dirs_exist_ok=True)
 
@@ -458,8 +483,8 @@ class CollectionPublisher(ConfigurableResource):
                 with open(readme_path, "w") as readme_file:
                     readme_file.write(readme)
 
-            if generate_datapackage:
-                datapackage = {
+            if generate_data_package:
+                data_package = {
                     "name": collection_name,
                     "resources": [
                         {"path": "patients.parquet", "format": "parquet"},
@@ -467,9 +492,9 @@ class CollectionPublisher(ConfigurableResource):
                         {"path": "series.parquet", "format": "parquet"},
                     ],
                 }
-                datapackage_path = os.path.join(temp_dir, "datapackage.yaml")
-                with open(datapackage_path, "w") as dp_file:
-                    yaml.dump(datapackage, dp_file)
+                data_package_path = os.path.join(temp_dir, "datapackage.yaml")
+                with open(data_package_path, "w") as dp_file:
+                    yaml.dump(data_package, dp_file)
 
             log.info(f"Uploading collection {collection_name} to Hugging Face")
             # Note: the repository has to be already created

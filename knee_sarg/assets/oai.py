@@ -18,12 +18,11 @@ from pydantic import Field
 from ..resources import (
     OAISampler,
     OaiPipeline,
-    make_output_dir,
     OAI_COLLECTION_NAME,
     CartilageThicknessTable,
+    FileStorage,
 )
 from ..assets.ingested_study import (
-    INGESTED_DIR,
     study_uid_partitions_def,
     ingested_study,
 )
@@ -111,13 +110,14 @@ def cartilage_thickness(
     config: ThicknessImages,
     duckdb: DuckDBResource,
     oai_pipeline: OaiPipeline,
+    file_storage: FileStorage,
 ) -> pl.DataFrame:
     """
     Cartilage Thickness Images. Generates images for a series in data/collections/OAI_COLLECTION_NAME/patient_id/study_uid/cartilage_thickness/series_id.
     """
     study_uid = context.partition_key
     # gather images we want to run the pipeline on
-    ingested_images_root: Path = INGESTED_DIR
+    ingested_images_root: Path = file_storage.ingested_path
 
     with duckdb.get_connection() as conn:
         cursor = conn.execute(
@@ -152,7 +152,7 @@ def cartilage_thickness(
         "patient": study["patient_id"],
         "study": study["study_description"],
     }
-    output_dir = make_output_dir(
+    output_dir = file_storage.make_output_dir(
         OAI_COLLECTION_NAME, study_dir_info, "cartilage_thickness"
     )
 

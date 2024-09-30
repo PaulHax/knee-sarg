@@ -12,11 +12,7 @@ import polars as pl
 from dagster import asset, get_dagster_logger, Config, DynamicPartitionsDefinition
 from slugify import slugify
 
-from ..resources import (
-    STAGED_DIR,
-    INGESTED_DIR,
-    CollectionTables,
-)
+from ..resources import CollectionTables, FileStorage
 
 log = get_dagster_logger()
 
@@ -85,13 +81,15 @@ def clean_empty_directories(root: Path, path: Path):
     partitions_def=study_uid_partitions_def, metadata={"partition_expr": "study_uid"}
 )
 def ingested_study(
-    config: StagedStudyConfig, collection_tables: CollectionTables
+    config: StagedStudyConfig,
+    collection_tables: CollectionTables,
+    file_storage: FileStorage,
 ) -> pl.DataFrame:
     """
     Ingested study data.
     """
     staged_study_path = (
-        STAGED_DIR
+        file_storage.staged_path
         / config.collection_name
         / config.uploader
         / config.patient_id
@@ -101,7 +99,7 @@ def ingested_study(
     patient = pd.read_json(staged_study_path / "patient.json", orient="index")
     patient = patient.rename(columns=clean_column_name)
     patient = convert_date_columns(patient)
-    log.info(f"Injesting study for patient: {config.patient_id}")
+    log.info(f"Ingesting study for patient: {config.patient_id}")
     collection_tables.insert_into_collection(
         config.collection_name, "patients", patient
     )
@@ -115,7 +113,7 @@ def ingested_study(
     series = series.rename(columns=clean_column_name)
     collection_tables.insert_into_collection(config.collection_name, "series", series)
 
-    ingested_patient_path = INGESTED_DIR / config.patient_id
+    ingested_patient_path = file_storage.ingested_path / config.patient_id
     os.makedirs(ingested_patient_path, exist_ok=True)
     ingested_study_path = ingested_patient_path / config.study_uid
     if ingested_study_path.exists():
@@ -124,9 +122,12 @@ def ingested_study(
     shutil.move(staged_study_path, ingested_patient_path)
 
     staged_patient_path = (
-        STAGED_DIR / config.collection_name / config.uploader / config.patient_id
+        file_storage.staged_path
+        / config.collection_name
+        / config.uploader
+        / config.patient_id
     )
-    clean_empty_directories(STAGED_DIR, staged_patient_path)
+    clean_empty_directories(file_storage.staged_path, staged_patient_path)
 
     return config_to_dataframe(config)
 

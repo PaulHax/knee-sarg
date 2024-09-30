@@ -11,19 +11,21 @@ from dagster import (
 
 from .assets.ingested_study import study_uid_partitions_def
 from .assets.oai import oai_patient_id_partitions_def
-from .resources import STAGED_DIR, OAISampler
+from .resources import OAISampler, FileStorage
 from .jobs import ingest_and_analyze_study_job, stage_oai_sample_job
 
 
 @sensor(job=ingest_and_analyze_study_job, default_status=DefaultSensorStatus.RUNNING)
-def staged_study_sensor(context: SensorEvaluationContext):
+def staged_study_sensor(context: SensorEvaluationContext, file_storage: FileStorage):
     """
     Sensor that triggers when a study is staged.
     """
+    staged_path = file_storage.staged_path
     run_requests = []
     partitions_to_add = []
-    for collection_name in os.listdir(STAGED_DIR):
-        collection_path = STAGED_DIR / collection_name
+    print(f"Checking {staged_path}")
+    for collection_name in os.listdir(staged_path):
+        collection_path = staged_path / collection_name
         if not os.path.isdir(collection_path):
             continue
         for uploader in os.listdir(collection_path):

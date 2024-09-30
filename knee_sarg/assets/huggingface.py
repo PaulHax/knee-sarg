@@ -25,7 +25,7 @@ that improves how communities collaborate on open data to diagnose knee cancer a
         collection_publisher.publish(
             collection_name=collection_name,
             readme=readme_content,
-            generate_datapackage=True,
+            generate_data_package=True,
         )
 
     return hf_asset

@@ -1,3 +1,4 @@
+import os
 from dagster import (
     EnvVar,
     Definitions,
@@ -13,11 +14,13 @@ from .assets import huggingface, oai, ingested_study
 from .resources import (
     # DBT_PROJECT_DIR,
     DATABASE_PATH,
+    DATA_DIR,
     CollectionPublisher,
     CollectionTables,
     OAISampler,
     OaiPipeline,
     CartilageThicknessTable,
+    FileStorage,
 )
 from .jobs import (
     stage_oai_samples_job,
@@ -45,14 +48,24 @@ jobs = [
     cartilage_thickness_job,
 ]
 
+# Use os.getenv to get the environment variable with a default value
+root_dir = os.getenv("FILE_STORAGE_ROOT", str(DATA_DIR))
+
+file_storage = FileStorage(root_dir=root_dir)
 
 resources = {
     # "dbt": dbt,
     "io_manager": DuckDBPolarsIOManager(database=DATABASE_PATH, schema="main"),
-    "collection_publisher": CollectionPublisher(hf_token=EnvVar("HUGGINGFACE_TOKEN")),
+    "collection_publisher": CollectionPublisher(
+        hf_token=EnvVar("HUGGINGFACE_TOKEN"), file_storage=file_storage
+    ),
     "duckdb": duckdb_resource,
-    "collection_tables": CollectionTables(duckdb=duckdb_resource),
-    "oai_sampler": OAISampler(oai_data_root="/mnt/cybertron/OAI"),
+    "collection_tables": CollectionTables(
+        duckdb=duckdb_resource, file_storage=file_storage
+    ),
+    "oai_sampler": OAISampler(
+        oai_data_root="/mnt/cybertron/OAI", file_storage=file_storage
+    ),
     "oai_pipeline": OaiPipeline(
         pipeline_src_dir=EnvVar("PIPELINE_SRC_DIR"),
         env_setup_command=EnvVar("ENV_SETUP_COMMAND"),
@@ -63,7 +76,10 @@ resources = {
             remote_port=22,
         ),
     ),
-    "cartilage_thickness_table": CartilageThicknessTable(duckdb=duckdb_resource),
+    "cartilage_thickness_table": CartilageThicknessTable(
+        duckdb=duckdb_resource, file_storage=file_storage
+    ),
+    "file_storage": file_storage,
 }
 
 sensors = [staged_study_sensor, patient_id_sensor]
