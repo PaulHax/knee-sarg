@@ -1,4 +1,5 @@
 import os
+import json
 
 from dagster import (
     sensor,
@@ -20,10 +21,14 @@ def staged_study_sensor(context: SensorEvaluationContext, file_storage: FileStor
     """
     Sensor that triggers when a study is staged.
     """
+    staged_studies_to_modified_time = (
+        json.loads(context.cursor) if context.cursor else {}
+    )
+
     staged_path = file_storage.staged_path
     run_requests = []
     partitions_to_add = []
-    print(f"Checking {staged_path}")
+
     for collection_name in os.listdir(staged_path):
         collection_path = staged_path / collection_name
         if not os.path.isdir(collection_path):
@@ -38,24 +43,33 @@ def staged_study_sensor(context: SensorEvaluationContext, file_storage: FileStor
                         os.path.getmtime(os.path.join(study_uid_path, f))
                         for f in os.listdir(study_uid_path)
                     )
-                    run = RunRequest(
-                        run_key=f"{collection_name}-{uploader}-{patient_id}-{study_uid}-{last_modified_time}",
-                        partition_key=study_uid,
-                        run_config=RunConfig(
-                            ops={
-                                "ingested_study": {
-                                    "config": {
-                                        "collection_name": collection_name,
-                                        "uploader": uploader,
-                                        "study_uid": study_uid,
-                                        "patient_id": patient_id,
-                                    }
-                                },
-                            },
-                        ),
+                    staged_id = f"{collection_name}-{uploader}-{patient_id}-{study_uid}"
+                    existing_last_modified_time = staged_studies_to_modified_time.get(
+                        staged_id
                     )
-                    run_requests.append(run)
-                    partitions_to_add.append(study_uid)
+                    if last_modified_time != existing_last_modified_time:
+                        staged_studies_to_modified_time[staged_id] = last_modified_time
+                        run = RunRequest(
+                            run_key=f"{collection_name}-{uploader}-{patient_id}-{study_uid}-{last_modified_time}",
+                            partition_key=study_uid,
+                            run_config=RunConfig(
+                                ops={
+                                    "ingested_study": {
+                                        "config": {
+                                            "collection_name": collection_name,
+                                            "uploader": uploader,
+                                            "study_uid": study_uid,
+                                            "patient_id": patient_id,
+                                        }
+                                    },
+                                },
+                            ),
+                        )
+                        run_requests.append(run)
+                        partitions_to_add.append(study_uid)
+
+    context.update_cursor(json.dumps(staged_studies_to_modified_time))
+
     return SensorResult(
         run_requests=run_requests,
         dynamic_partitions_requests=[
@@ -74,7 +88,6 @@ def patient_id_sensor(context: SensorEvaluationContext, oai_sampler: OAISampler)
     only for IDs not already processed (stored in context.cursor).
     Using the cursor instead of run_id so folks can clear the cursor in the GUI.
     """
-    import json
 
     cursor_ids = json.loads(context.cursor) if context.cursor else []
 

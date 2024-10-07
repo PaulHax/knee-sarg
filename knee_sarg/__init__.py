@@ -1,9 +1,5 @@
 import os
-from dagster import (
-    EnvVar,
-    Definitions,
-    load_assets_from_modules,
-)
+from dagster import EnvVar, Definitions, load_assets_from_modules
 
 # from dagster_dbt import DbtCliResource, load_assets_from_dbt_project
 from dagster_duckdb_polars import DuckDBPolarsIOManager

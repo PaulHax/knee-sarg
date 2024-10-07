@@ -88,13 +88,13 @@ def ingested_study(
     """
     Ingested study data.
     """
-    staged_study_path = (
+    staged_patient_path = (
         file_storage.staged_path
         / config.collection_name
         / config.uploader
         / config.patient_id
-        / config.study_uid
     )
+    staged_study_path = staged_patient_path / config.study_uid
 
     patient = pd.read_json(staged_study_path / "patient.json", orient="index")
     patient = patient.rename(columns=clean_column_name)
@@ -113,7 +113,9 @@ def ingested_study(
     series = series.rename(columns=clean_column_name)
     collection_tables.insert_into_collection(config.collection_name, "series", series)
 
-    ingested_patient_path = file_storage.ingested_path / config.patient_id
+    ingested_patient_path = (
+        file_storage.ingested_path / config.collection_name / config.patient_id
+    )
     os.makedirs(ingested_patient_path, exist_ok=True)
     ingested_study_path = ingested_patient_path / config.study_uid
     if ingested_study_path.exists():
@@ -121,12 +123,6 @@ def ingested_study(
 
     shutil.move(staged_study_path, ingested_patient_path)
 
-    staged_patient_path = (
-        file_storage.staged_path
-        / config.collection_name
-        / config.uploader
-        / config.patient_id
-    )
     clean_empty_directories(file_storage.staged_path, staged_patient_path)
 
     return config_to_dataframe(config)

@@ -158,6 +158,7 @@ def cartilage_thickness(
 
     image_path = (
         ingested_images_root
+        / OAI_COLLECTION_NAME
         / study["patient_id"]
         / study_uid
         / "nifti"
