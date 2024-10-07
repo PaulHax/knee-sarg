@@ -60,7 +60,7 @@ resources = {
         duckdb=duckdb_resource, file_storage=file_storage
     ),
     "oai_sampler": OAISampler(
-        oai_data_root="/mnt/cybertron/OAI", file_storage=file_storage
+        oai_data_root=EnvVar("OAI_DATA_ROOT"), file_storage=file_storage
     ),
     "oai_pipeline": OaiPipeline(
         pipeline_src_dir=EnvVar("PIPELINE_SRC_DIR"),
