@@ -65,7 +65,13 @@ class FileStorage(ConfigurableResource):
     def collections_path(self) -> Path:
         return self._collections_path
 
-    def make_output_dir(self, collection: str, dir_info: StudyInfo, analysis_name: str):
+    def get_output_dir(
+        self,
+        collection: str,
+        dir_info: StudyInfo,
+        analysis_name: str,
+        code_version: str = "undefined",
+    ):
         patient, study, study_uid = (
             dir_info["patient"],
             dir_info["study"],
@@ -74,7 +80,19 @@ class FileStorage(ConfigurableResource):
         study_dir = (
             self.collections_path / collection / patient / f"{study}-{study_uid}"
         )
-        output_dir = study_dir / analysis_name
+        output_dir = study_dir / analysis_name / f"v-{code_version}"
+        return output_dir
+
+    def make_output_dir(
+        self,
+        collection: str,
+        dir_info: StudyInfo,
+        analysis_name: str,
+        code_version: str = "undefined",
+    ):
+        output_dir = self.get_output_dir(
+            collection, dir_info, analysis_name, code_version
+        )
 
         if output_dir.exists():
             shutil.rmtree(output_dir)

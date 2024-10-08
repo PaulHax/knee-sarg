@@ -1,5 +1,10 @@
 import os
-from dagster import EnvVar, Definitions, load_assets_from_modules
+from dagster import (
+    EnvVar,
+    Definitions,
+    load_assets_from_modules,
+    load_asset_checks_from_modules,
+)
 
 # from dagster_dbt import DbtCliResource, load_assets_from_dbt_project
 from dagster_duckdb_polars import DuckDBPolarsIOManager
@@ -7,6 +12,7 @@ from dagster_duckdb import DuckDBResource
 from dagster_ssh import SSHResource
 
 from .assets import huggingface, oai, ingested_study
+
 from .resources import (
     # DBT_PROJECT_DIR,
     DATABASE_PATH,
@@ -35,6 +41,7 @@ duckdb_resource = DuckDBResource(database=DATABASE_PATH)
 # dbt_assets = load_assets_from_dbt_project(DBT_PROJECT_DIR, DBT_PROJECT_DIR)
 dbt_assets = []
 all_assets = load_assets_from_modules([oai, ingested_study, huggingface])
+all_checks = load_asset_checks_from_modules([oai, ingested_study, huggingface])
 
 
 jobs = [
@@ -81,5 +88,9 @@ resources = {
 sensors = [staged_study_sensor, patient_id_sensor]
 
 defs = Definitions(
-    assets=[*dbt_assets, *all_assets], resources=resources, jobs=jobs, sensors=sensors
+    assets=[*dbt_assets, *all_assets],
+    asset_checks=all_checks,
+    resources=resources,
+    jobs=jobs,
+    sensors=sensors,
 )

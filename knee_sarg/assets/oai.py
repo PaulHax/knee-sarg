@@ -7,6 +7,8 @@ import polars as pl
 import pandas as pd
 from dagster import (
     asset,
+    asset_check,
+    AssetCheckResult,
     get_dagster_logger,
     AssetExecutionContext,
     Config,
@@ -102,7 +104,6 @@ class ThicknessImages(Config):
         default_factory=lambda: ["thickness_FC.png", "thickness_TC.png"],
         description="List of required output files",
     )
-    code_version: str = cartilage_thickness_code_version.get_value()
 
 
 @asset(
@@ -122,7 +123,7 @@ def cartilage_thickness(
     Cartilage Thickness Images. Generates images for a series in data/collections/OAI_COLLECTION_NAME/patient_id/study_uid/cartilage_thickness/series_id.
     """
     study_uid = context.partition_key
-    # gather images we want to run the pipeline on
+    # get image to run the pipeline on
     ingested_images_root: Path = file_storage.ingested_path
 
     with duckdb.get_connection() as conn:
@@ -152,19 +153,18 @@ def cartilage_thickness(
         column_names = [desc[0] for desc in cursor.description]
         row = cursor.fetchone()
         series = dict(zip(column_names, row))
-        # all_series = pd.DataFrame(series, columns=column_names)
 
     study_dir_info = {
         "patient": study["patient_id"],
         "study": study["study_description"],
         "study_uid": study_uid,
     }
-    analysis_output_dir = file_storage.make_output_dir(
-        OAI_COLLECTION_NAME, study_dir_info, "cartilage_thickness"
+    output_dir = file_storage.make_output_dir(
+        OAI_COLLECTION_NAME,
+        study_dir_info,
+        "cartilage_thickness",
+        cartilage_thickness_code_version.get_value(),
     )
-
-    version = config.code_version or "undefined"
-    output_dir = analysis_output_dir / f"v-{version}"
 
     image_path = (
         ingested_images_root
@@ -213,11 +213,12 @@ def cartilage_thickness(
 
 @asset(
     partitions_def=study_uid_partitions_def,
+    metadata={"partition_expr": "study_uid"},
 )
 def cartilage_thickness_runs(
     cartilage_thickness: pl.DataFrame,
     cartilage_thickness_table: CartilageThicknessTable,
-) -> None:
+) -> pl.DataFrame:
     """
     Cartilage Thickness Run Statuses. Parquet table holding the status of cartilage thickness runs.
     Saved in data/collections/OAI_COLLECTION_NAME/cartilage_thickness_runs.parquet.
@@ -225,3 +226,26 @@ def cartilage_thickness_runs(
     run = cartilage_thickness.to_pandas()
     cartilage_thickness_table.insert_run(run)
     cartilage_thickness_table.write_incremental_parquet(run)
+    return cartilage_thickness
+
+
+@asset_check(asset=cartilage_thickness_runs)
+def check_cartilage_thickness_runs(
+    config: ThicknessImages,
+    cartilage_thickness_runs: pl.DataFrame,
+):
+    runs = cartilage_thickness_runs.to_pandas()
+
+    study_uids_missing_files = [
+        run.study_uid
+        for run in runs.itertuples(index=False)
+        if any(
+            not (Path(run.computed_files_dir) / file).exists()
+            for file in config.required_output_files
+        )
+    ]
+
+    return AssetCheckResult(
+        passed=len(study_uids_missing_files) == 0,
+        metadata={"study_uids_missing_files": study_uids_missing_files},
+    )
