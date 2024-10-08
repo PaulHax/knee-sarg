@@ -66,11 +66,14 @@ class FileStorage(ConfigurableResource):
         return self._collections_path
 
     def make_output_dir(self, collection: str, dir_info: StudyInfo, analysis_name: str):
-        patient, study = (
+        patient, study, study_uid = (
             dir_info["patient"],
             dir_info["study"],
+            dir_info["study_uid"],
         )
-        study_dir = self.collections_path / collection / patient / study
+        study_dir = (
+            self.collections_path / collection / patient / f"{study}-{study_uid}"
+        )
         output_dir = study_dir / analysis_name
 
         if output_dir.exists():
@@ -401,9 +404,6 @@ class OAISampler(ConfigurableResource):
                             itk.imwrite(image, nifti_path / "image.nii.gz")
 
         return result
-
-
-point_to_tbb_in_user_space = "export LD_LIBRARY_PATH=$HOME/oneapi-tbb-2021.5.0/lib/intel64/gcc4.8:$LD_LIBRARY_PATH"
 
 
 class OaiPipeline(ConfigurableResource):

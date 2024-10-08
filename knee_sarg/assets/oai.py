@@ -11,6 +11,7 @@ from dagster import (
     AssetExecutionContext,
     Config,
     DynamicPartitionsDefinition,
+    EnvVar,
 )
 from dagster_duckdb import DuckDBResource
 from pydantic import Field
@@ -93,17 +94,22 @@ def oai_sample(
     oai_sampler.get_samples(patient_id)
 
 
+cartilage_thickness_code_version = EnvVar("CARTILAGE_THICKNESS_CODE_VERSION")
+
+
 class ThicknessImages(Config):
     required_output_files: List[str] = Field(
         default_factory=lambda: ["thickness_FC.png", "thickness_TC.png"],
         description="List of required output files",
     )
+    code_version: str = cartilage_thickness_code_version.get_value()
 
 
 @asset(
     deps=[ingested_study],
     partitions_def=study_uid_partitions_def,
     metadata={"partition_expr": "study_uid"},
+    code_version=cartilage_thickness_code_version.get_value(),
 )
 def cartilage_thickness(
     context: AssetExecutionContext,
@@ -151,10 +157,14 @@ def cartilage_thickness(
     study_dir_info = {
         "patient": study["patient_id"],
         "study": study["study_description"],
+        "study_uid": study_uid,
     }
-    output_dir = file_storage.make_output_dir(
+    analysis_output_dir = file_storage.make_output_dir(
         OAI_COLLECTION_NAME, study_dir_info, "cartilage_thickness"
     )
+
+    version = config.code_version or "undefined"
+    output_dir = analysis_output_dir / f"v-{version}"
 
     image_path = (
         ingested_images_root
