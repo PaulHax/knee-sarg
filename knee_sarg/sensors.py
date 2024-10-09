@@ -86,9 +86,9 @@ def patient_id_sensor(context: SensorEvaluationContext, oai_sampler: OAISampler)
     """
     Watches JSON file for Patient IDs, then creates patient_id partitions and runs oai_sample,
     only for IDs not already processed (stored in context.cursor).
-    Using the cursor instead of run_id so folks can clear the cursor in the GUI.
+    To recopy patient data that has already been processed, use the Dagster GUI to clear
+    this sensors cursor.
     """
-
     cursor_ids = json.loads(context.cursor) if context.cursor else []
 
     # check for new patient IDs
