@@ -123,6 +123,7 @@ def cartilage_thickness(
     Cartilage Thickness Images. Generates images for a series in data/collections/OAI_COLLECTION_NAME/patient_id/study_uid/cartilage_thickness/series_id.
     """
     study_uid = context.partition_key
+    code_version = cartilage_thickness_code_version.get_value()
     # get image to run the pipeline on
     ingested_images_root: Path = file_storage.ingested_path
 
@@ -163,7 +164,7 @@ def cartilage_thickness(
         OAI_COLLECTION_NAME,
         study_dir_info,
         "cartilage_thickness",
-        cartilage_thickness_code_version.get_value(),
+        code_version,
     )
 
     image_path = (
@@ -198,6 +199,7 @@ def cartilage_thickness(
                     "study_uid": study_uid,
                     "series_id": series["series_instance_uid"],
                     "computed_files_dir": str(output_dir),
+                    "code_version": code_version,
                 }
             ]
         ).astype(
@@ -208,6 +210,42 @@ def cartilage_thickness(
                 "computed_files_dir": "str",
             }
         )
+    )
+
+
+@asset_check(asset=cartilage_thickness)
+def check_code_version_cartilage_thickness_runs(
+    config: ThicknessImages,
+    cartilage_thickness: pl.DataFrame,
+):
+    """
+    For each processed study_uid, check that it has output files with current code version.
+    """
+    code_version = cartilage_thickness_code_version.get_value()
+    runs = cartilage_thickness.to_pandas()
+    run_study_uids = runs["study_uid"].unique()
+
+    study_uids_current_code_version = set(
+        [
+            run.study_uid
+            for run in runs.itertuples(index=False)
+            if run.code_version == code_version
+            and all(
+                (Path(run.computed_files_dir) / file).exists()
+                for file in config.required_output_files
+            )
+        ]
+    )
+
+    stale_code_version_study_uids = [
+        study_uid
+        for study_uid in run_study_uids
+        if study_uid not in study_uids_current_code_version
+    ]
+
+    return AssetCheckResult(
+        passed=len(stale_code_version_study_uids) == 0,
+        metadata={"stale_code_version_study_uids": stale_code_version_study_uids},
     )
 
 
@@ -230,14 +268,17 @@ def cartilage_thickness_runs(
 
 
 @asset_check(asset=cartilage_thickness_runs)
-def check_cartilage_thickness_runs(
+def check_files_exist_cartilage_thickness_runs(
     config: ThicknessImages,
     cartilage_thickness_runs: pl.DataFrame,
 ):
+    """
+    Checks if collections folder has the output files for each run of cartilage_thickness.
+    """
     runs = cartilage_thickness_runs.to_pandas()
 
-    study_uids_missing_files = [
-        run.study_uid
+    missing_directories = [
+        {"study_uid": run.study_uid, "computed_files_dir": run.computed_files_dir}
         for run in runs.itertuples(index=False)
         if any(
             not (Path(run.computed_files_dir) / file).exists()
@@ -246,6 +287,6 @@ def check_cartilage_thickness_runs(
     ]
 
     return AssetCheckResult(
-        passed=len(study_uids_missing_files) == 0,
-        metadata={"study_uids_missing_files": study_uids_missing_files},
+        passed=len(missing_directories) == 0,
+        metadata={"missing_directories": missing_directories},
     )
