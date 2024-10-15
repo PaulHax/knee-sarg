@@ -24,15 +24,18 @@ from .resources import (
     CartilageThicknessTable,
     FileStorage,
 )
+
 from .jobs import (
     stage_oai_samples_job,
     stage_oai_sample_job,
     ingest_and_analyze_study_job,
     cartilage_thickness_job,
 )
+
 from .sensors import (
     staged_study_sensor,
     patient_id_sensor,
+    cartilage_thickness_study_uid_file_sensor,
 )
 
 # dbt = DbtCliResource(project_dir=DBT_PROJECT_DIR, profiles_dir=DBT_PROJECT_DIR)
@@ -42,14 +45,6 @@ duckdb_resource = DuckDBResource(database=DATABASE_PATH)
 dbt_assets = []
 all_assets = load_assets_from_modules([oai, ingested_study, huggingface])
 all_checks = load_asset_checks_from_modules([oai, ingested_study, huggingface])
-
-
-jobs = [
-    stage_oai_samples_job,
-    stage_oai_sample_job,
-    ingest_and_analyze_study_job,
-    cartilage_thickness_job,
-]
 
 # Use os.getenv to get the environment variable with a default value
 root_dir = os.getenv("FILE_STORAGE_ROOT", str(DATA_DIR))
@@ -85,12 +80,20 @@ resources = {
     "file_storage": file_storage,
 }
 
-sensors = [staged_study_sensor, patient_id_sensor]
 
 defs = Definitions(
     assets=[*dbt_assets, *all_assets],
     asset_checks=all_checks,
     resources=resources,
-    jobs=jobs,
-    sensors=sensors,
+    jobs=[
+        stage_oai_samples_job,
+        stage_oai_sample_job,
+        ingest_and_analyze_study_job,
+        cartilage_thickness_job,
+    ],
+    sensors=[
+        staged_study_sensor,
+        patient_id_sensor,
+        cartilage_thickness_study_uid_file_sensor,
+    ],
 )
