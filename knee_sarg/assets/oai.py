@@ -187,7 +187,7 @@ def cartilage_thickness(
 
 
 @asset_check(asset=cartilage_thickness)
-def check_code_version_cartilage_thickness(
+def has_current_code_version_output(
     config: ThicknessImages,
     cartilage_thickness: pl.DataFrame,
 ):
@@ -218,9 +218,7 @@ def check_code_version_cartilage_thickness(
 
     return AssetCheckResult(
         passed=len(stale_code_version_study_uids) == 0,
-        metadata={
-            "stale_code_version_study_uids": ", ".join(stale_code_version_study_uids)
-        },
+        metadata={"stale_code_version_study_uids": stale_code_version_study_uids},
     )
 
 
@@ -243,7 +241,7 @@ def cartilage_thickness_runs(
 
 
 @asset_check(asset=cartilage_thickness_runs)
-def check_files_exist_cartilage_thickness_runs(
+def has_image_files(
     config: ThicknessImages,
     cartilage_thickness_runs: pl.DataFrame,
 ):

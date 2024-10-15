@@ -28,7 +28,7 @@ pixi run dev
 
 We need to configure where the OAI source files live and how to run the [OAI Analysis 2](https://github.com/uncbiag/OAI_analysis_2) code. Configuration is pulled from environment variables. One way to set env vars is with a .env file in the root directory of this repo.
 
-```
+```bash
 cp .env.example .env
 ```
 
@@ -49,11 +49,10 @@ Edit the .env file.
 
 On a computer with \~22 GB GPU memory. Make a user with SSH access and
 
-```
+```bash
 git clone https://github.com/dzenanz/OAI_analysis_2.git
 cd OAI_analysis_2
-# create virtualenv with Python 3.8
-python3.8 -m virtualenv venv
+python3.8 -m virtualenv venv # OAI analysis 2 requires Python 3.8
 source venv/bin/activate
 pip install --upgrade pip
 pip install -e .
@@ -81,6 +80,14 @@ A Dagster sensor checks that file every 30 seconds and kicks off this automatic 
 3. A sensor checks every 30 seconds for new folders of studies `staged` and starts the ingest_and_analyze_study job and creates a `study_uid` partition.
 4. ingest_study asset copies the study files to `FILE_STORAGE_ROOT/ingested`
 5. The cartilage_thickness asset runs the OAI_analysis_2 pipeline via SSH and copies the output files into `FILE_STORAGE_ROOT/collections`
+
+#### Rerun Cartilage Thickness Pipeline using CLI
+
+After ingesting patient(s), you can rerun specific the pipeline on select `study_uid`s partitions via the Dagster CLI
+
+```bash
+pixi run cartilage-thickness 1.3.12.2.1107.5.2.13.20576.4.0.8047887714483085
+```
 
 ## 🎯 Motivation
 
