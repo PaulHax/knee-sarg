@@ -6,6 +6,7 @@ Staged study data can either come from the OAI or from the web browser portal.
 import os
 import shutil
 from pathlib import Path
+import json
 
 import pandas as pd
 import polars as pl
@@ -80,13 +81,12 @@ def clean_empty_directories(root: Path, path: Path):
 @asset(
     partitions_def=study_uid_partitions_def, metadata={"partition_expr": "study_uid"}
 )
-def ingested_study(
+def ingested_study_files(
     config: StagedStudyConfig,
-    collection_tables: CollectionTables,
     file_storage: FileStorage,
 ) -> pl.DataFrame:
     """
-    Ingested study data.
+    Ingested study files.
     """
     staged_patient_path = (
         file_storage.staged_path
@@ -95,23 +95,6 @@ def ingested_study(
         / config.patient_id
     )
     staged_study_path = staged_patient_path / config.study_uid
-
-    patient = pd.read_json(staged_study_path / "patient.json", orient="index")
-    patient = patient.rename(columns=clean_column_name)
-    patient = convert_date_columns(patient)
-    log.info(f"Ingesting study for patient: {config.patient_id}")
-    collection_tables.insert_into_collection(
-        config.collection_name, "patients", patient
-    )
-
-    study = pd.read_json(staged_study_path / "study.json", orient="rows")
-    study = study.rename(columns=clean_column_name)
-    study = convert_date_columns(study)
-    collection_tables.insert_into_collection(config.collection_name, "studies", study)
-
-    series = pd.read_json(staged_study_path / "series.json", orient="rows")
-    series = series.rename(columns=clean_column_name)
-    collection_tables.insert_into_collection(config.collection_name, "series", series)
 
     ingested_patient_path = (
         file_storage.ingested_path / config.collection_name / config.patient_id
@@ -123,9 +106,62 @@ def ingested_study(
 
     shutil.move(staged_study_path, ingested_patient_path)
 
+    upload_info = {
+        "collection_name": config.collection_name,
+        "uploader": config.uploader,
+    }
+
+    with open(ingested_patient_path / "upload.json", "w") as fp:
+        fp.write(json.dumps(upload_info))
+
     clean_empty_directories(file_storage.staged_path, staged_patient_path)
 
     return config_to_dataframe(config)
+
+
+@asset(
+    partitions_def=study_uid_partitions_def, metadata={"partition_expr": "study_uid"}
+)
+def ingested_study_table(
+    collection_tables: CollectionTables,
+    file_storage: FileStorage,
+    ingested_study_files: pl.DataFrame,
+) -> pl.DataFrame:
+    """
+    Table of ingested studies.
+    """
+    collection_name, uploader, patient_id, study_uid = ingested_study_files.row(0)
+    ingested_patient_path = file_storage.ingested_path / collection_name / patient_id
+    study_path = ingested_patient_path / study_uid
+
+    patient = pd.read_json(study_path / "patient.json", orient="index")
+    patient = patient.rename(columns=clean_column_name)
+    patient = convert_date_columns(patient)
+    log.info(f"Ingesting study for patient: {patient_id}")
+    collection_tables.insert_into_collection(collection_name, "patients", patient)
+
+    study = pd.read_json(study_path / "study.json", orient="rows")
+    study = study.rename(columns=clean_column_name)
+    study = convert_date_columns(study)
+    collection_tables.insert_into_collection(collection_name, "studies", study)
+
+    series = pd.read_json(study_path / "series.json", orient="rows")
+    series = series.rename(columns=clean_column_name)
+    collection_tables.insert_into_collection(collection_name, "series", series)
+
+    return pl.from_pandas(
+        pd.DataFrame(
+            [
+                {
+                    "collection_name": collection_name,
+                    "patient_id": patient_id,
+                    "study_uid": study_uid,
+                    "series_uid": series["series_instance_uid"].iloc[0],
+                    "study_description": study["study_description"].iloc[0],
+                }
+            ]
+        )
+    )
 
 
 @asset()

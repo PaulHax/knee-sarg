@@ -54,7 +54,7 @@ def staged_study_sensor(context: SensorEvaluationContext, file_storage: FileStor
                             partition_key=study_uid,
                             run_config=RunConfig(
                                 ops={
-                                    "ingested_study": {
+                                    "ingested_study_files": {
                                         "config": {
                                             "collection_name": collection_name,
                                             "uploader": uploader,

@@ -15,19 +15,16 @@ from dagster import (
     DynamicPartitionsDefinition,
     EnvVar,
 )
-from dagster_duckdb import DuckDBResource
 from pydantic import Field
 
 from ..resources import (
     OAISampler,
     OaiPipeline,
-    OAI_COLLECTION_NAME,
     CartilageThicknessTable,
     FileStorage,
 )
 from ..assets.ingested_study import (
     study_uid_partitions_def,
-    ingested_study,
 )
 
 log = get_dagster_logger()
@@ -107,7 +104,6 @@ class ThicknessImages(Config):
 
 
 @asset(
-    deps=[ingested_study],
     partitions_def=study_uid_partitions_def,
     metadata={"partition_expr": "study_uid"},
     code_version=cartilage_thickness_code_version.get_value(),
@@ -115,9 +111,9 @@ class ThicknessImages(Config):
 def cartilage_thickness(
     context: AssetExecutionContext,
     config: ThicknessImages,
-    duckdb: DuckDBResource,
     oai_pipeline: OaiPipeline,
     file_storage: FileStorage,
+    ingested_study_table: pl.DataFrame,
 ) -> pl.DataFrame:
     """
     Cartilage Thickness Images. Generates images for a series in data/collections/OAI_COLLECTION_NAME/patient_id/study_uid/cartilage_thickness/series_id.
@@ -127,41 +123,17 @@ def cartilage_thickness(
     # get image to run the pipeline on
     ingested_images_root: Path = file_storage.ingested_path
 
-    with duckdb.get_connection() as conn:
-        cursor = conn.execute(
-            f"SELECT * FROM {OAI_COLLECTION_NAME}_studies WHERE study_instance_uid = ?",
-            (study_uid,),
-        )
-        row = cursor.fetchone()
-        column_names = [desc[0] for desc in cursor.description]
-        study = dict(zip(column_names, row))
-
-    if not study:
-        raise Exception(
-            f"Study with uid {study_uid} not found in {OAI_COLLECTION_NAME}_studies table"
-        )
-
-    with duckdb.get_connection() as conn:
-        cursor = conn.execute(
-            f"""
-            SELECT 
-            *
-            FROM {OAI_COLLECTION_NAME}_series
-            WHERE study_instance_uid = ?
-            """,
-            (study_uid,),
-        )
-        column_names = [desc[0] for desc in cursor.description]
-        row = cursor.fetchone()
-        series = dict(zip(column_names, row))
+    collection_name, patient_id, study_uid, series_uid, study_description = (
+        ingested_study_table.row(0)
+    )
 
     study_dir_info = {
-        "patient": study["patient_id"],
-        "study": study["study_description"],
+        "patient": patient_id,
+        "study": study_description,
         "study_uid": study_uid,
     }
     output_dir = file_storage.make_output_dir(
-        OAI_COLLECTION_NAME,
+        collection_name,
         study_dir_info,
         "cartilage_thickness",
         code_version,
@@ -169,11 +141,11 @@ def cartilage_thickness(
 
     image_path = (
         ingested_images_root
-        / OAI_COLLECTION_NAME
-        / study["patient_id"]
+        / collection_name
+        / patient_id
         / study_uid
         / "nifti"
-        / series["series_instance_uid"]
+        / series_uid
         / "image.nii.gz"
     )
 
@@ -195,9 +167,9 @@ def cartilage_thickness(
         pd.DataFrame(
             [
                 {
-                    "patient_id": study["patient_id"],
+                    "patient_id": patient_id,
                     "study_uid": study_uid,
-                    "series_id": series["series_instance_uid"],
+                    "series_id": series_uid,
                     "computed_files_dir": str(output_dir),
                     "code_version": code_version,
                 }
@@ -208,13 +180,14 @@ def cartilage_thickness(
                 "study_uid": "str",
                 "series_id": "str",
                 "computed_files_dir": "str",
+                "code_version": "str",
             }
         )
     )
 
 
 @asset_check(asset=cartilage_thickness)
-def check_code_version_cartilage_thickness_runs(
+def check_code_version_cartilage_thickness(
     config: ThicknessImages,
     cartilage_thickness: pl.DataFrame,
 ):
@@ -245,7 +218,9 @@ def check_code_version_cartilage_thickness_runs(
 
     return AssetCheckResult(
         passed=len(stale_code_version_study_uids) == 0,
-        metadata={"stale_code_version_study_uids": stale_code_version_study_uids},
+        metadata={
+            "stale_code_version_study_uids": ", ".join(stale_code_version_study_uids)
+        },
     )
 
 
@@ -288,5 +263,5 @@ def check_files_exist_cartilage_thickness_runs(
 
     return AssetCheckResult(
         passed=len(missing_directories) == 0,
-        metadata={"missing_directories": missing_directories},
+        metadata={"directories_with_missing_files": missing_directories},
     )

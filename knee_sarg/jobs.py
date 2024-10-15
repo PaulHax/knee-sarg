@@ -2,7 +2,11 @@ from dagster import (
     define_asset_job,
 )
 
-from .assets.ingested_study import ingested_study, study_uid_partitions_def
+from .assets.ingested_study import (
+    ingested_study_files,
+    ingested_study_table,
+    study_uid_partitions_def,
+)
 from .assets.oai import (
     oai_samples,
     oai_sample,
@@ -32,7 +36,12 @@ stage_oai_sample_job = define_asset_job(
 
 ingest_and_analyze_study_job = define_asset_job(
     "ingest_and_analyze_study",
-    [ingested_study, cartilage_thickness, cartilage_thickness_runs],
+    [
+        ingested_study_files,
+        ingested_study_table,
+        cartilage_thickness,
+        cartilage_thickness_runs,
+    ],
     description="Ingest a study into a collection and run analysis on it",
     partitions_def=study_uid_partitions_def,
     tags={"job": "gpu"},
@@ -40,7 +49,7 @@ ingest_and_analyze_study_job = define_asset_job(
 
 cartilage_thickness_job = define_asset_job(
     "cartilage_thickness_job",
-    [cartilage_thickness, cartilage_thickness_runs],
+    [ingested_study_table, cartilage_thickness, cartilage_thickness_runs],
     description="Run cartilage thickness analysis",
     partitions_def=study_uid_partitions_def,
     tags={"job": "gpu"},

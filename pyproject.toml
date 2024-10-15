@@ -65,7 +65,7 @@ dev = { features = ["dev"], solve-group = "default" }
 
 [tool.pixi.tasks]
 stage-samples = { cmd = "dagster job execute -j stage_oai_nsclc_radiogenomic_samples -m knee_sarg", description = "Stage OAI Radiogenomic Samples" }
-clean = { cmd = "rm -rf data/*.parquet data/*.duckdb dbt/target dbt/dbt_packages dbt/logs", description = "Clean the project artifacts" }
+clean = { cmd = "rm -rf data/*.duckdb && rm -rf dbt/target dbt/dbt_packages dbt/logs", description = "Clean the project artifacts" }
 
 [tool.pixi.feature.dev.tasks]
 dev = { cmd = "dagster dev", description = "Run the development environment" }
@@ -74,6 +74,3 @@ fix = { cmd = "ruff check . --fix", description = "Run ruff to fix linting issue
 format = { cmd = "ruff format", description = "Run ruff to format code" }
 check-format = { cmd = "ruff format --check", description = "Run ruff to check code formating" }
 
-
-[tool.pixi.dependencies]
-s5cmd = ">=2.2.2,<3"

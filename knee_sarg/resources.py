@@ -186,7 +186,7 @@ class CartilageThicknessTable(ConfigurableResource):
                 )
             else:
                 conn.execute(
-                    f"CREATE TABLE IF NOT EXISTS {self._table_name} (patient_id VARCHAR, study_uid VARCHAR, series_id VARCHAR, computed_files_dir VARCHAR);"
+                    f"CREATE TABLE IF NOT EXISTS {self._table_name} (patient_id VARCHAR, study_uid VARCHAR, series_id VARCHAR, computed_files_dir VARCHAR, code_version VARCHAR);"
                 )
 
     def teardown_after_execution(self, _: InitResourceContext) -> None:
@@ -299,50 +299,11 @@ class OAISampler(ConfigurableResource):
                         acquisition_df = dess_df.loc[acquisition_dess, :]
                         log.info(f"Fetching images for patient {patient_id}")
 
-                        studies_table = pd.DataFrame(
-                            columns=[
-                                "patient_id",
-                                "study_instance_uid",
-                                "study_date",
-                                "study_description",
-                            ]
-                        )
-                        studies_table.astype(
-                            {
-                                "patient_id": "string",
-                                "study_instance_uid": "string",
-                                "study_date": "string",
-                                "study_description": "string",
-                            }
-                        )
-
-                        series_table = pd.DataFrame(
-                            columns=[
-                                "patient_id",
-                                "study_instance_uid",
-                                "series_instance_uid",
-                                "series_number",
-                                "modality",
-                                "body_part_examined",
-                                "series_description",
-                            ]
-                        )
-                        series_table.astype(
-                            {
-                                "patient_id": "string",
-                                "study_instance_uid": "string",
-                                "series_instance_uid": "string",
-                                "series_number": "int32",
-                                "modality": "string",
-                                "body_part_examined": "string",
-                                "series_description": "string",
-                            }
-                        )
-
                         for _, description in acquisition_df.iterrows():
                             vol_folder = folder / description["Folder"]
                             if not vol_folder.exists():
                                 continue
+
                             frame_0 = itk.imread(vol_folder / os.listdir(vol_folder)[0])
                             meta = dict(frame_0)
                             image = itk.imread(str(vol_folder))
@@ -375,12 +336,49 @@ class OAISampler(ConfigurableResource):
                                 f"{study_date} {study_description} {series_number} {modality} {body_part_examined} {series_description}"
                             )
 
+                            studies_table = pd.DataFrame(
+                                columns=[
+                                    "patient_id",
+                                    "study_instance_uid",
+                                    "study_date",
+                                    "study_description",
+                                ]
+                            ).astype(
+                                {
+                                    "patient_id": "string",
+                                    "study_instance_uid": "string",
+                                    "study_date": "string",
+                                    "study_description": "string",
+                                }
+                            )
                             studies_table.loc[len(studies_table)] = {
                                 "patient_id": patient_id,
                                 "study_instance_uid": study_instance_uid,
                                 "study_date": study_date,
                                 "study_description": study_description,
                             }
+
+                            series_table = pd.DataFrame(
+                                columns=[
+                                    "patient_id",
+                                    "study_instance_uid",
+                                    "series_instance_uid",
+                                    "series_number",
+                                    "modality",
+                                    "body_part_examined",
+                                    "series_description",
+                                ]
+                            ).astype(
+                                {
+                                    "patient_id": "string",
+                                    "study_instance_uid": "string",
+                                    "series_instance_uid": "string",
+                                    "series_number": "int32",
+                                    "modality": "string",
+                                    "body_part_examined": "string",
+                                    "series_description": "string",
+                                }
+                            )
                             series_table.loc[len(series_table)] = {
                                 "patient_id": patient_id,
                                 "study_instance_uid": study_instance_uid,
