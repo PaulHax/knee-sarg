@@ -82,7 +82,7 @@ class FileStorage(ConfigurableResource):
         study_dir = (
             self.collections_path / collection / patient / f"{study}-{study_uid}"
         )
-        output_dir = study_dir / analysis_name / f"v{code_version}"
+        output_dir = study_dir / analysis_name / code_version
         return output_dir
 
     def make_output_dir(

@@ -120,6 +120,9 @@ def cartilage_thickness(
     """
     study_uid = context.partition_key
     code_version = str(cartilage_thickness_code_version.get_value())
+    if "oai/code-version" in context.run.tags:
+        code_version = context.run.tags["oai/code-version"]
+
     # get image to run the pipeline on
     ingested_images_root: Path = file_storage.ingested_path
 
