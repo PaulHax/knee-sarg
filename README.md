@@ -53,7 +53,7 @@ Edit the .env file.
 
 #### OAI Analysis 2 setup
 
-On a computer with \~22 GB GPU memory. Make a user with SSH access and
+For a 2 concurrent runs of the pipeline, we need a computer with \~22 GB GPU memory.
 
 ```bash
 git clone https://github.com/dzenanz/OAI_analysis_2.git
@@ -67,8 +67,22 @@ pwd # note output for PIPELINE_SRC_DIR env var
 
 Edit the .env file.
 
--   Set `SSH_HOST`, `SSH_USERNAME`, `SSH_PASSWORD`
 -   Set `PIPELINE_SRC_DIR` to the OAI_analysis_2 repo root directory
+-   Set `ENV_SETUP_COMMAND` to shell commands that need to be run before Dagster calls `python ./oai_analysis/pipeline_cli.py {remote_image_path} {remote_out_dir}`.
+
+If you followed the virtualenv and pip setup above, the env could be similar to this
+
+```
+PIPELINE_SRC_DIR=/home/paulhax/src/OAI_analysis_2 # pipeline repo dir
+ENV_SETUP_COMMAND=. ./venv/bin/activate
+```
+
+##### Optionally Running via SSH
+
+By default, Dagster runs the pipeline in a subprocess on the same computer it runs. If the computer that runs the pipeline is different than the Dagster one, make a user with SSH access on the pipeline running computer.
+
+-   Set the `OAI_PIPELINE_RESOURCE` environment variable to `ssh`
+-   Set `SSH_HOST`, `SSH_USERNAME`, `SSH_PASSWORD` environment variables when calling `pixi run dev`
 
 ### Run OAI Cartilage Thickness Pipeline
 
