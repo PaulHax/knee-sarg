@@ -20,7 +20,8 @@ from .resources import (
     CollectionPublisher,
     CollectionTables,
     OAISampler,
-    OaiPipeline,
+    OaiPipelineSSH,
+    OaiPipelineSubprocess,
     CartilageThicknessTable,
     FileStorage,
 )
@@ -49,6 +50,33 @@ all_checks = load_asset_checks_from_modules([oai, ingested_study, huggingface])
 # Use os.getenv to get the environment variable with a default value
 root_dir = os.getenv("FILE_STORAGE_ROOT", str(DATA_DIR))
 
+
+# pick how to run the OAI pipeline
+pipeline_src_dir = EnvVar("PIPELINE_SRC_DIR")
+env_setup_command = EnvVar("ENV_SETUP_COMMAND")
+oai_pipeline_resource_env = os.getenv("OAI_PIPELINE_RESOURCE", "subprocess")
+if oai_pipeline_resource_env == "subprocess":
+    oai_pipeline_resource = OaiPipelineSubprocess(
+        pipeline_src_dir=pipeline_src_dir,
+        env_setup_command=env_setup_command,
+    )
+elif oai_pipeline_resource_env == "ssh":
+    oai_pipeline_resource = OaiPipelineSSH(
+        pipeline_src_dir=pipeline_src_dir,
+        env_setup_command=env_setup_command,
+        ssh_connection=SSHResource(
+            remote_host=EnvVar("SSH_HOST"),
+            username=EnvVar("SSH_USERNAME"),
+            password=EnvVar("SSH_PASSWORD"),
+            remote_port=22,
+        ),
+    )
+else:
+    raise ValueError(
+        f"Invalid value for env var OAI_PIPELINE_RESOURCE: {oai_pipeline_resource_env}"
+    )
+
+
 file_storage = FileStorage(root_dir=root_dir)
 
 resources = {
@@ -64,16 +92,7 @@ resources = {
     "oai_sampler": OAISampler(
         oai_data_root=EnvVar("OAI_DATA_ROOT"), file_storage=file_storage
     ),
-    "oai_pipeline": OaiPipeline(
-        pipeline_src_dir=EnvVar("PIPELINE_SRC_DIR"),
-        env_setup_command=EnvVar("ENV_SETUP_COMMAND"),
-        ssh_connection=SSHResource(
-            remote_host=EnvVar("SSH_HOST"),
-            username=EnvVar("SSH_USERNAME"),
-            password=EnvVar("SSH_PASSWORD"),
-            remote_port=22,
-        ),
-    ),
+    "oai_pipeline": oai_pipeline_resource,
     "cartilage_thickness_table": CartilageThicknessTable(
         duckdb=duckdb_resource, file_storage=file_storage
     ),

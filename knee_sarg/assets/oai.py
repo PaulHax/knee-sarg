@@ -151,7 +151,7 @@ def cartilage_thickness(
 
     oai_pipeline.run_pipeline(str(image_path), str(output_dir), study_uid)
 
-    # Check if specific files are in computed_files_dir
+    # Check if specific files are in output_dir
     missing_files = [
         file
         for file in config.required_output_files

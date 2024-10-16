@@ -4,6 +4,7 @@ from typing import Dict, Optional, List, Any
 from pathlib import Path
 import shutil
 import json
+import subprocess
 
 import yaml
 import pandas as pd
@@ -20,6 +21,7 @@ from huggingface_hub import HfApi
 import pyarrow.csv as csv
 
 import itk
+from abc import ABC, abstractmethod
 
 log = get_dagster_logger()
 
@@ -428,7 +430,18 @@ class OAISampler(ConfigurableResource):
         return result
 
 
-class OaiPipeline(ConfigurableResource):
+class OaiPipeline(ConfigurableResource, ABC):
+    @abstractmethod
+    def run_pipeline(
+        self,
+        image_path: str,
+        output_dir: str,
+        run_id: str,
+    ):
+        pass
+
+
+class OaiPipelineSSH(OaiPipeline):
     ssh_connection: ResourceDependency[SSHResource]
     pipeline_src_dir: str
     env_setup_command: str = ""
@@ -463,10 +476,10 @@ class OaiPipeline(ConfigurableResource):
             remote_files = [
                 file
                 for file in stdout.read().decode().splitlines()
-                if file != "in_image.nrrd"
+                if file
+                != "in_image.nrrd"  # skip original image as may be unathorized to distribute in collection
             ]
 
-            os.makedirs(output_dir, exist_ok=True)
             for remote_file in remote_files:
                 self.ssh_connection.sftp_get(
                     f"{remote_out_dir}/{remote_file}",
@@ -477,6 +490,31 @@ class OaiPipeline(ConfigurableResource):
             log.info(stdout.read().decode())
             if stderr_output := stderr.read().decode():
                 log.error(stderr_output)
+
+
+class OaiPipelineSubprocess(OaiPipeline):
+    pipeline_src_dir: str
+    env_setup_command: str = ""
+
+    def run_pipeline(
+        self,
+        image_path: str,
+        output_dir: str,
+        _: str,
+    ):
+        optional_env_setup = (
+            f"{self.env_setup_command} && " if self.env_setup_command else ""
+        )
+        run_call = f"python ./oai_analysis/pipeline_cli.py {image_path} {output_dir}"
+        command = f"{optional_env_setup}{run_call}"
+        log.info(f"Running pipeline: {command}")
+
+        result = subprocess.run(
+            command, cwd=self.pipeline_src_dir, shell=True, capture_output=True
+        )
+        log.info(result.stdout)
+        if result.stderr:
+            log.error(result.stderr)
 
 
 class CollectionPublisher(ConfigurableResource):

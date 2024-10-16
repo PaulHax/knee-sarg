@@ -135,7 +135,6 @@ def cartilage_thickness_study_uid_file_sensor(context: SensorEvaluationContext):
 
     # check for new patient IDs
     json_path = DATA_DIR / "oai-sampler" / "study_uids_to_run.json"
-    print(json_path)
     if not os.path.exists(json_path):
         return
 
