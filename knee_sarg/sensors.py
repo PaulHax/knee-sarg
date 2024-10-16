@@ -33,6 +33,9 @@ def staged_study_sensor(context: SensorEvaluationContext, file_storage: FileStor
     run_requests = []
     partitions_to_add = []
 
+    if not os.path.isdir(staged_path):
+        return
+
     for collection_name in os.listdir(staged_path):
         collection_path = staged_path / collection_name
         if not os.path.isdir(collection_path):
