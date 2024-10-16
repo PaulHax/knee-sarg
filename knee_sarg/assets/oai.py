@@ -45,7 +45,7 @@ def oai_patient_ids(
     config: OaiPatientIdsConfig,
 ) -> pl.DataFrame:
     """
-    OAI Patient IDs.
+    Reads OAI Patient IDs from a JSON file. Default file is DATA/oai-sampler/patient_small.json.
     """
     ids = oai_sampler.get_patient_ids(config.patient_id_file)
 

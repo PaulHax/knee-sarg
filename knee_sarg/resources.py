@@ -214,6 +214,7 @@ class OAISampler(ConfigurableResource):
     # directory with OAI data as provided by the OAI
     oai_data_root: str
     file_storage: ResourceDependency[FileStorage]
+    oai_sampler_dir: str = str(DATA_DIR / "oai-sampler")
     patient_ids_file: str = str(DATA_DIR / "oai-sampler" / "patient_ids.json")
 
     def get_time_point_folders(self) -> Dict[int, str]:
@@ -227,10 +228,15 @@ class OAISampler(ConfigurableResource):
         }
         return time_point_folders
 
-    def get_patient_ids(self) -> List[str]:
-        if not os.path.exists(self.patient_ids_file):
+    def get_patient_ids(self, file_name: Optional[str] = None) -> List[str]:
+        if file_name:
+            file_path = Path(self.oai_sampler_dir) / file_name
+        else:
+            file_path = self.patient_ids_file
+
+        if not os.path.exists(file_path):
             return []
-        with open(self.patient_ids_file, "r") as fp:
+        with open(file_path, "r") as fp:
             target_patients = json.load(fp)
         return target_patients
 
