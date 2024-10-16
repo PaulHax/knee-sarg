@@ -88,7 +88,7 @@ class FileStorage(ConfigurableResource):
         collection: str,
         dir_info: StudyInfo,
         analysis_name: str,
-        code_version: str = "undefined",
+        code_version: str = "None",
     ):
         output_dir = self.get_output_dir(
             collection, dir_info, analysis_name, code_version

@@ -119,7 +119,7 @@ def cartilage_thickness(
     Cartilage Thickness Images. Generates images for a series in data/collections/OAI_COLLECTION_NAME/patient_id/study_uid/cartilage_thickness/series_id.
     """
     study_uid = context.partition_key
-    code_version = cartilage_thickness_code_version.get_value()
+    code_version = str(cartilage_thickness_code_version.get_value())
     # get image to run the pipeline on
     ingested_images_root: Path = file_storage.ingested_path
 
@@ -194,7 +194,7 @@ def has_current_code_version_output(
     """
     For each processed study_uid, check that it has output files with current code version.
     """
-    code_version = cartilage_thickness_code_version.get_value()
+    code_version = str(cartilage_thickness_code_version.get_value())
     runs = cartilage_thickness.to_pandas()
     run_study_uids = runs["study_uid"].unique()
 
