@@ -437,6 +437,7 @@ class OaiPipeline(ConfigurableResource, ABC):
         image_path: str,
         output_dir: str,
         run_id: str,
+        override_src_dir: Optional[str] = None,
     ):
         pass
 
@@ -451,9 +452,11 @@ class OaiPipelineSSH(OaiPipeline):
         image_path: str,
         output_dir: str,
         run_id: str,
+        override_src_dir: Optional[str] = None,
     ):
+        src_dir = override_src_dir or self.pipeline_src_dir
         with self.ssh_connection.get_connection() as client:
-            temp_dir = f"{self.pipeline_src_dir}/temp/{run_id}"
+            temp_dir = f"{src_dir}/temp/{run_id}"
             remote_in_dir = f"{temp_dir}/in-data/"
             stdin, stdout, stderr = client.exec_command(f"mkdir -p {remote_in_dir}")
             remote_image_path = f"{remote_in_dir}/{os.path.basename(image_path)}"
@@ -466,7 +469,7 @@ class OaiPipelineSSH(OaiPipeline):
             run_call = f"python ./oai_analysis/pipeline_cli.py {remote_image_path} {remote_out_dir}"
             log.info(f"Running pipeline: {run_call}")
             stdin, stdout, stderr = client.exec_command(
-                f"cd {self.pipeline_src_dir} && source ./venv/bin/activate && {optional_env_setup} {run_call}"
+                f"cd {src_dir} && source ./venv/bin/activate && {optional_env_setup} {run_call}"
             )
             log.info(stdout.read().decode())
             if stderr_output := stderr.read().decode():
@@ -501,7 +504,9 @@ class OaiPipelineSubprocess(OaiPipeline):
         image_path: str,
         output_dir: str,
         _: str,
+        override_src_dir: Optional[str] = None,
     ):
+        src_dir = override_src_dir or self.pipeline_src_dir
         optional_env_setup = (
             f"{self.env_setup_command} && " if self.env_setup_command else ""
         )
@@ -509,9 +514,7 @@ class OaiPipelineSubprocess(OaiPipeline):
         command = f"{optional_env_setup}{run_call}"
         log.info(f"Running pipeline: {command}")
 
-        result = subprocess.run(
-            command, cwd=self.pipeline_src_dir, shell=True, capture_output=True
-        )
+        result = subprocess.run(command, cwd=src_dir, shell=True, capture_output=True)
         log.info(result.stdout)
         if result.stderr:
             log.error(result.stderr)
