@@ -11,12 +11,11 @@ from dagster import (
 )
 
 from .assets.ingested_study import study_uid_partitions_def
-from .assets.oai import oai_patient_id_partitions_def
+from .assets.oai import oai_patient_id_partitions_def, cartilage_thickness_job
 from .resources import OAISampler, FileStorage, DATA_DIR
 from .jobs import (
     ingest_and_analyze_study_job,
     stage_oai_sample_job,
-    cartilage_thickness_job,
 )
 
 

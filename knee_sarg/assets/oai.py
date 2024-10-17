@@ -14,6 +14,11 @@ from dagster import (
     Config,
     DynamicPartitionsDefinition,
     EnvVar,
+    define_asset_job,
+    op,
+    job,
+    OpExecutionContext,
+    MetadataValue,
 )
 from pydantic import Field
 
@@ -25,6 +30,7 @@ from ..resources import (
 )
 from ..assets.ingested_study import (
     study_uid_partitions_def,
+    ingested_study_table,
 )
 
 log = get_dagster_logger()
@@ -120,6 +126,10 @@ def cartilage_thickness(
     """
     study_uid = context.partition_key
     code_version = str(cartilage_thickness_code_version.get_value())
+    if "oai/code-version" in context.run.tags:
+        code_version = context.run.tags["oai/code-version"]
+    override_src_directory = context.run.tags.get("oai/src-directory", None)
+
     # get image to run the pipeline on
     ingested_images_root: Path = file_storage.ingested_path
 
@@ -149,7 +159,9 @@ def cartilage_thickness(
         / "image.nii.gz"
     )
 
-    oai_pipeline.run_pipeline(str(image_path), str(output_dir), study_uid)
+    oai_pipeline.run_pipeline(
+        str(image_path), str(output_dir), study_uid, override_src_directory
+    )
 
     # Check if specific files are in output_dir
     missing_files = [
@@ -263,3 +275,26 @@ def has_image_files(
         passed=len(missing_directories) == 0,
         metadata={"directories_with_missing_files": missing_directories},
     )
+
+
+cartilage_thickness_job = define_asset_job(
+    "cartilage_thickness_job",
+    [ingested_study_table, cartilage_thickness, cartilage_thickness_runs],
+    description="Run cartilage thickness analysis",
+    partitions_def=study_uid_partitions_def,
+    tags={"job": "gpu"},
+)
+
+
+@op
+def execute_a_job(context: OpExecutionContext):
+    result = cartilage_thickness_job.execute_in_process(
+        instance=context.instance,
+        run_config={"resources": {"values": {"config": {"foo": 1}}}},
+    )
+    context.add_output_metadata({"run": MetadataValue.dagster_run(result.run_id)})
+
+
+@job
+def cartilage_thickness_code_location():
+    execute_a_job()

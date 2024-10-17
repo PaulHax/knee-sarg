@@ -129,6 +129,15 @@ After ingesting patient(s), you can rerun specific the pipeline on select `study
 pixi run cartilage-thickness 1.3.12.2.1107.5.2.13.20576.4.0.8047887714483085
 ```
 
+#### Compare results across code versions
+
+Using Dagster GUI
+
+1. Open Overview -> Jobs -> cartilage_thickness_job
+2. Click Materialize All to open backfill GUI modal.
+3. Select the study UID partitions to run.
+4.
+
 ## 💡 Principles
 
 -   **Open**: Code, standards, infrastructure, and data, are public and open source.
