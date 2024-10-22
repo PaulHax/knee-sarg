@@ -103,24 +103,6 @@ A Dagster sensor checks that file every 30 seconds and kicks off this automatic 
 
 #### Rerun Cartilage Thickness Pipeline
 
-To finds scans that have not been processed by the latest code version, run the cartilage_thickness::has_current_code_version_output check.
-The asset check's output metadata list all ingested study UIDs missing an output directory matching the current code version.
-
-##### Using JSON and Dagster Sensor
-
-Create a data/oai-sampler/study_uids_to_run.json file. Save the file with JSON array of study UIDs. The metadata output of the cartilage_thickness::has_current_code_version_output code check can be used. Example JSON file
-
-```json
-[
-    "1.3.6.1.4.1.21767.172.16.9.203.1198108533.1.0",
-    "1.3.6.1.4.1.21767.172.16.9.203.1198108533.0.0"
-]
-```
-
-Then ensure the cartilage_thickness_study_uid_file_sensor is running.
-
-To re-run a study UID that has already been added to the JSON file, clear the cartilage_thickness_study_uid_file_sensor's cursor.
-
 ##### Using CLI
 
 After ingesting patient(s), you can rerun specific the pipeline on select `study_uid`s partitions via the Dagster CLI
@@ -148,6 +130,24 @@ There is a python script that backfills a given number of studies with given tag
 ```bash
 pixi run ct-backfill --count 2 --tags '{"oai/code-version": "old-approach", "oai/src-directory": "/home/paulhax/src/old-OAI_analysis_2"}'
 ```
+
+##### Using JSON and Dagster Sensor
+
+Create a data/oai-sampler/study_uids_to_run.json file. Save the file with JSON array of study UIDs. The metadata output of the cartilage_thickness::has_current_code_version_output code check can be used. Example JSON file
+
+```json
+[
+    "1.3.6.1.4.1.21767.172.16.9.203.1198108533.1.0",
+    "1.3.6.1.4.1.21767.172.16.9.203.1198108533.0.0"
+]
+```
+
+Then ensure the cartilage_thickness_study_uid_file_sensor is running.
+
+To re-run a study UID that has already been added to the JSON file, clear the cartilage_thickness_study_uid_file_sensor's cursor.
+
+To finds scans that have not been processed by the latest code version, run the cartilage_thickness::has_current_code_version_output check.
+The asset check's output metadata list all ingested study UIDs missing an output directory matching the current code version.
 
 ## 💡 Principles
 
