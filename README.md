@@ -126,7 +126,21 @@ To re-run a study UID that has already been added to the JSON file, clear the ca
 After ingesting patient(s), you can rerun specific the pipeline on select `study_uid`s partitions via the Dagster CLI
 
 ```bash
-pixi run cartilage-thickness 1.3.12.2.1107.5.2.13.20576.4.0.8047887714483085
+pixi run cartilage-thickness 1.3.12.2.1107.5.2.13.20576.4.0.8047887714483085,1.3.6.1.4.1.21767.172.16.11.7.1385496118.2.0
+```
+
+##### Compare results across code versions
+
+The leaf output directory is the "code version". Set the output directory name with the `oai/code-version` tag
+
+```bash
+pixi run cartilage-thickness 1.3.12.2.1107.5.2.13.20576.4.0.8047887714483085 --tags '{"oai/code-version": "new-approach"}'
+```
+
+To start another run using a different pipeline source directory, add the `oai/src-directory` tag.
+
+```bash
+pixi run cartilage-thickness 1.3.12.2.1107.5.2.13.20576.4.0.8047887714483085 --tags '{"oai/code-version": "old-approach","oai/src-directory": "/home/paulhax/src/old-OAI_analysis_2"}'
 ```
 
 ## 💡 Principles

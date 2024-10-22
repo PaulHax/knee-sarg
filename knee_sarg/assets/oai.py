@@ -122,6 +122,7 @@ def cartilage_thickness(
     code_version = str(cartilage_thickness_code_version.get_value())
     if "oai/code-version" in context.run.tags:
         code_version = context.run.tags["oai/code-version"]
+    override_src_directory = context.run.tags.get("oai/src-directory", None)
 
     # get image to run the pipeline on
     ingested_images_root: Path = file_storage.ingested_path
@@ -152,7 +153,9 @@ def cartilage_thickness(
         / "image.nii.gz"
     )
 
-    oai_pipeline.run_pipeline(str(image_path), str(output_dir), study_uid)
+    oai_pipeline.run_pipeline(
+        str(image_path), str(output_dir), study_uid, override_src_directory
+    )
 
     # Check if specific files are in output_dir
     missing_files = [
