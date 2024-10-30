@@ -16,9 +16,8 @@ dependencies = [
     "httpx[http2]",
     "pyarrow",
     "python-slugify",
-    "tenacity",
     "itk>=5.4.0,<6",
-    "ngff-zarr[itk,dask-image]>=0.8.7,<0.9",
+    "notebook"
 ]
 
 requires-python = ">=3.11, <=3.13"
