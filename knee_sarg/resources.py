@@ -436,6 +436,7 @@ class OaiPipeline(ConfigurableResource, ABC):
         self,
         image_path: str,
         output_dir: str,
+        laterality: str,
         run_id: str,
         override_src_dir: Optional[str] = None,
     ):
@@ -451,6 +452,7 @@ class OaiPipelineSSH(OaiPipeline):
         self,
         image_path: str,
         output_dir: str,
+        laterality: str,
         run_id: str,
         override_src_dir: Optional[str] = None,
     ):
@@ -466,7 +468,7 @@ class OaiPipelineSSH(OaiPipeline):
                 f"{self.env_setup_command} && " if self.env_setup_command else ""
             )
             remote_out_dir = f"{temp_dir}/oai_results"
-            run_call = f"python ./oai_analysis/pipeline_cli.py {remote_image_path} {remote_out_dir}"
+            run_call = f"python ./oai_analysis/pipeline_cli.py {remote_image_path} {remote_out_dir} {laterality}"
             log.info(f"Running pipeline: {run_call}")
             stdin, stdout, stderr = client.exec_command(
                 f"cd {src_dir} && source ./venv/bin/activate && {optional_env_setup} {run_call}"
@@ -503,14 +505,15 @@ class OaiPipelineSubprocess(OaiPipeline):
         self,
         image_path: str,
         output_dir: str,
-        _: str,
+        laterality: str,
+        _: str,  # run id
         override_src_dir: Optional[str] = None,
     ):
         src_dir = override_src_dir or self.pipeline_src_dir
         optional_env_setup = (
             f"{self.env_setup_command} && " if self.env_setup_command else ""
         )
-        run_call = f"python ./oai_analysis/pipeline_cli.py {image_path} {output_dir}"
+        run_call = f"python ./oai_analysis/pipeline_cli.py {image_path} {output_dir} {laterality}"
         command = f"{optional_env_setup}{run_call}"
         log.info(f"Running pipeline: {command}")
 

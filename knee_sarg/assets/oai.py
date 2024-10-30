@@ -98,7 +98,7 @@ cartilage_thickness_code_version = EnvVar("CARTILAGE_THICKNESS_CODE_VERSION")
 
 class ThicknessImages(Config):
     required_output_files: List[str] = Field(
-        default_factory=lambda: ["thickness_FC.png", "thickness_TC.png"],
+        default_factory=lambda: ["FC_thickness.png", "TC_thickness.png"],
         description="List of required output files",
     )
 
@@ -153,8 +153,11 @@ def cartilage_thickness(
         / "image.nii.gz"
     )
 
+    is_left = study_description.find("LEFT") > -1
+    laterality = "left" if is_left else "right"
+
     oai_pipeline.run_pipeline(
-        str(image_path), str(output_dir), study_uid, override_src_directory
+        str(image_path), str(output_dir), laterality, study_uid, override_src_directory
     )
 
     # Check if specific files are in output_dir
