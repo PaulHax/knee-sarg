@@ -133,7 +133,7 @@ def cartilage_thickness(
 
     study_dir_info = {
         "patient": patient_id,
-        "study": study_description,
+        "study_description": study_description,
         "study_uid": study_uid,
     }
     output_dir = file_storage.make_output_dir(

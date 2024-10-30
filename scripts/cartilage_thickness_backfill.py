@@ -1,18 +1,8 @@
-import os
 import subprocess
-from pathlib import Path
 import argparse
 import pandas as pd
 from dotenv import load_dotenv
-
-DATA_ROOT = ""
-
-
-def get_cartilage_thickness_runs_file_path():
-    root_dir = os.getenv("FILE_STORAGE_ROOT", DATA_ROOT)
-    oai_collection = Path(root_dir) / "collections" / "oai"
-    runs_file = oai_collection / "cartilage_thickness_runs.parquet"
-    return runs_file
+from cartilage_thickness_collection import get_cartilage_thickness_runs_file_path
 
 
 def get_unique_study_uids(runs_file):

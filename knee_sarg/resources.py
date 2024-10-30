@@ -5,6 +5,7 @@ from pathlib import Path
 import shutil
 import json
 import subprocess
+from abc import ABC, abstractmethod
 
 import yaml
 import pandas as pd
@@ -20,8 +21,8 @@ from pydantic import PrivateAttr
 from huggingface_hub import HfApi
 import pyarrow.csv as csv
 
+from scripts.cartilage_thickness_collection import FilePaths
 import itk
-from abc import ABC, abstractmethod
 
 log = get_dagster_logger()
 
@@ -43,29 +44,25 @@ class FileStorage(ConfigurableResource):
     ingested_dir: str = ""
     collections_dir: str = ""
 
-    def setup_for_execution(self, context: InitResourceContext) -> None:
-        root = Path(self.root_dir)
-        self._staged_path = (
-            Path(self.staged_dir) if self.staged_dir else root / "staged"
-        )
-        self._ingested_path = (
-            Path(self.ingested_dir) if self.ingested_dir else root / "ingested"
-        )
-        self._collections_path = (
-            Path(self.collections_dir) if self.collections_dir else root / "collections"
+    def setup_for_execution(self, _: InitResourceContext) -> None:
+        self._file_paths = FilePaths(
+            root_dir=self.root_dir,
+            staged_dir=self.staged_dir,
+            ingested_dir=self.ingested_dir,
+            collections_dir=self.collections_dir,
         )
 
     @property
     def staged_path(self) -> Path:
-        return self._staged_path
+        return self._file_paths.staged_path
 
     @property
     def ingested_path(self) -> Path:
-        return self._ingested_path
+        return self._file_paths.ingested_path
 
     @property
     def collections_path(self) -> Path:
-        return self._collections_path
+        return self._file_paths.collections_path
 
     def get_output_dir(
         self,
@@ -73,17 +70,10 @@ class FileStorage(ConfigurableResource):
         dir_info: StudyInfo,
         analysis_name: str,
         code_version: str = "undefined",
-    ):
-        patient, study, study_uid = (
-            dir_info["patient"],
-            dir_info["study"],
-            dir_info["study_uid"],
+    ) -> Path:
+        return self._file_paths.get_output_dir(
+            collection, dir_info, analysis_name, code_version
         )
-        study_dir = (
-            self.collections_path / collection / patient / f"{study}-{study_uid}"
-        )
-        output_dir = study_dir / analysis_name / code_version
-        return output_dir
 
     def make_output_dir(
         self,
@@ -91,16 +81,10 @@ class FileStorage(ConfigurableResource):
         dir_info: StudyInfo,
         analysis_name: str,
         code_version: str = "None",
-    ):
-        output_dir = self.get_output_dir(
+    ) -> Path:
+        return self._file_paths.make_output_dir(
             collection, dir_info, analysis_name, code_version
         )
-
-        if output_dir.exists():
-            shutil.rmtree(output_dir)
-        os.makedirs(output_dir, exist_ok=True)
-
-        return output_dir
 
 
 class CollectionTables(ConfigurableResource):
