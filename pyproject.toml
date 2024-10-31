@@ -17,7 +17,8 @@ dependencies = [
     "pyarrow",
     "python-slugify",
     "itk>=5.4.0,<6",
-    "notebook"
+    "notebook",
+    "dagstermill"
 ]
 
 requires-python = ">=3.11, <=3.13"

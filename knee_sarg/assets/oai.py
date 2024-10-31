@@ -14,7 +14,9 @@ from dagster import (
     Config,
     DynamicPartitionsDefinition,
     EnvVar,
+    AssetIn,
 )
+from dagstermill import define_dagstermill_asset
 from pydantic import Field
 
 from ..resources import (
@@ -272,3 +274,14 @@ def has_image_files(
         passed=len(missing_directories) == 0,
         metadata={"directories_with_missing_files": missing_directories},
     )
+
+
+cartilage_thickness_images_notebook = define_dagstermill_asset(
+    name="cartilage_thickness_images_notebook",
+    notebook_path=str(
+        Path(__file__).parent.parent.parent
+        / "scripts"
+        / "cartilage_thickness_images.ipynb"
+    ),
+    ins={"runs": AssetIn("cartilage_thickness_runs")},
+)

@@ -10,6 +10,7 @@ from dagster import (
 from dagster_duckdb_polars import DuckDBPolarsIOManager
 from dagster_duckdb import DuckDBResource
 from dagster_ssh import SSHResource
+from dagstermill import ConfigurableLocalOutputNotebookIOManager
 
 from .assets import huggingface, oai, ingested_study
 
@@ -97,6 +98,7 @@ resources = {
         duckdb=duckdb_resource, file_storage=file_storage
     ),
     "file_storage": file_storage,
+    "output_notebook_io_manager": ConfigurableLocalOutputNotebookIOManager(),
 }
 
 

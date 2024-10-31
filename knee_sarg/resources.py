@@ -20,9 +20,9 @@ from dagster_ssh import SSHResource
 from pydantic import PrivateAttr
 from huggingface_hub import HfApi
 import pyarrow.csv as csv
+import itk
 
 from scripts.cartilage_thickness_collection import FilePaths
-import itk
 
 log = get_dagster_logger()
 
