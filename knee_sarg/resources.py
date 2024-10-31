@@ -318,12 +318,12 @@ class OAISampler(ConfigurableResource):
                             study_date = (
                                 f"{study_date[4:6]}-{study_date[6:8]}-{study_date[:4]}"
                             )
-                            study_description = meta.get("0008|1030", "")
+                            study_description = meta.get("0008|1030", "").strip()
                             series_number = meta.get("0020|0011", "0")
                             series_number = int(series_number)
                             modality = meta.get("0008|0060", "").strip()
                             body_part_examined = meta.get("0018|0015", "")
-                            series_description = meta.get("0008|103e", "")
+                            series_description = meta.get("0008|103e", "").strip()
                             log.info(
                                 f"{study_date} {study_description} {series_number} {modality} {body_part_examined} {series_description}"
                             )
@@ -497,9 +497,10 @@ class OaiPipelineSubprocess(OaiPipeline):
         optional_env_setup = (
             f"{self.env_setup_command} && " if self.env_setup_command else ""
         )
-        run_call = f"python ./oai_analysis/pipeline_cli.py {image_path} {output_dir} {laterality}"
+        run_call = f'python ./oai_analysis/pipeline_cli.py "{image_path}" "{output_dir}" {laterality}'
         command = f"{optional_env_setup}{run_call}"
-        log.info(f"Running pipeline: {command}")
+        log.info(f"Running pipeline: {run_call}")
+        log.info(f"With env setup: {command}")
 
         result = subprocess.run(command, cwd=src_dir, shell=True, capture_output=True)
         log.info(result.stdout)
