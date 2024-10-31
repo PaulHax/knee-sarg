@@ -68,6 +68,7 @@ stage-samples = { cmd = "dagster job execute -j stage_oai_nsclc_radiogenomic_sam
 cartilage-thickness = { cmd = "dagster job backfill -j cartilage_thickness_job", description = "Run cartilage thickness backfill job with passed partitions" }
 ct-backfill = { cmd = "python scripts/cartilage_thickness_backfill.py", description = "Run cartilage thickness backfill job on given number of partitions" }
 clean = { cmd = "rm -rf data/*.duckdb && rm -rf dbt/target dbt/dbt_packages dbt/logs", description = "Clean the project artifacts" }
+jupyter = { cmd = "python scripts/start_jupyter.py", description = "Run jupyter notebook" }
 
 [tool.pixi.feature.dev.tasks]
 dev = { cmd = "dagster dev", description = "Run the development environment" }
