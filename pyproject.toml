@@ -67,7 +67,7 @@ dev = { features = ["dev"], solve-group = "default" }
 stage-samples = { cmd = "dagster job execute -j stage_oai_nsclc_radiogenomic_samples -m knee_sarg", description = "Stage OAI Radiogenomic Samples" }
 cartilage-thickness = { cmd = "dagster job backfill -j cartilage_thickness_job", description = "Run cartilage thickness backfill job with passed partitions" }
 ct-backfill = { cmd = "python scripts/cartilage_thickness_backfill.py", description = "Run cartilage thickness backfill job on given number of partitions" }
-clean = { cmd = "rm -rf data/*.duckdb && rm -rf dbt/target dbt/dbt_packages dbt/logs", description = "Clean the project artifacts" }
+clean = { cmd = "rm -rf data/*.duckdb && rm -rf dbt/target dbt/dbt_packages dbt/logs && find data/dagster_home -mindepth 1 ! -name 'dagster.yaml' -delete", description = "Clean the project artifacts" }
 jupyter = { cmd = "python scripts/start_jupyter.py", description = "Run jupyter notebook" }
 
 [tool.pixi.feature.dev.tasks]
