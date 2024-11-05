@@ -1,12 +1,10 @@
 import subprocess
 import argparse
-import pandas as pd
 from dotenv import load_dotenv
-from cartilage_thickness_collection import get_cartilage_thickness_runs_file_path
+from cartilage_thickness_collection import get_runs
 
 
-def get_unique_study_uids(runs_file):
-    runs = pd.read_parquet(runs_file)
+def get_unique_study_uids(runs):
     return runs["study_uid"].unique()
 
 
@@ -15,8 +13,8 @@ def comma_separated(study_uids):
 
 
 def run_backfill(study_count, tags):
-    runs_file = get_cartilage_thickness_runs_file_path()
-    study_uids = get_unique_study_uids(runs_file)[:study_count]
+    runs = get_runs()
+    study_uids = get_unique_study_uids(runs)[:study_count]
     partitions = comma_separated(study_uids)
 
     cmd = [

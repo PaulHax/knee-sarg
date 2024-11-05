@@ -7,6 +7,8 @@ DATA_DIR = "data"  # if no env var, default directory where collections director
 
 StudyInfo = Dict[str, Any]
 
+THICKNESS_IMAGES = ["FC_thickness.png", "TC_thickness.png"]
+
 
 class FilePaths:
     def __init__(
@@ -71,16 +73,25 @@ class FilePaths:
         return output_dir
 
 
-def get_cartilage_thickness_runs_file_path():
+def get_oai_collection_dir():
     root_dir = os.getenv("FILE_STORAGE_ROOT", DATA_DIR)
-    oai_collection = Path(root_dir) / "collections" / "oai"
+    return Path(root_dir) / "collections" / "oai"
+
+
+def get_cartilage_thickness_runs_file_path():
+    oai_collection = get_oai_collection_dir()
     runs_file = oai_collection / "cartilage_thickness_runs.parquet"
     return runs_file
 
 
-def get_output_dir(study_uid: str, code_version: str = ""):
+def get_runs():
     runs_file = get_cartilage_thickness_runs_file_path()
-    runs = pd.read_parquet(runs_file)
+    return pd.read_parquet(runs_file)
+
+
+def get_output_dir(study_uid: str, code_version: str = ""):
+    """Gets most recent run"""
+    runs = get_runs()
 
     if code_version:
         matched_row = runs[

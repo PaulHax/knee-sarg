@@ -19,6 +19,8 @@ from dagster import (
 from dagstermill import define_dagstermill_asset
 from pydantic import Field
 
+from scripts.cartilage_thickness_collection import THICKNESS_IMAGES
+
 from ..resources import (
     OAISampler,
     OaiPipeline,
@@ -100,7 +102,7 @@ cartilage_thickness_code_version = EnvVar("CARTILAGE_THICKNESS_CODE_VERSION")
 
 class ThicknessImages(Config):
     required_output_files: List[str] = Field(
-        default_factory=lambda: ["FC_thickness.png", "TC_thickness.png"],
+        default_factory=lambda: THICKNESS_IMAGES,
         description="List of required output files",
     )
 
