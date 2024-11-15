@@ -23,6 +23,7 @@ from .resources import (
     OAISampler,
     OaiPipelineSSH,
     OaiPipelineSubprocess,
+    OaiPipelineSlurm,
     CartilageThicknessTable,
     FileStorage,
 )
@@ -71,6 +72,11 @@ elif oai_pipeline_resource_env == "ssh":
             password=EnvVar("SSH_PASSWORD"),
             remote_port=22,
         ),
+    )
+elif oai_pipeline_resource_env == "slurm":
+    oai_pipeline_resource = OaiPipelineSlurm(
+        pipeline_src_dir=pipeline_src_dir,
+        sbatch_args=EnvVar("SBATCH_ARGS"),
     )
 else:
     raise ValueError(

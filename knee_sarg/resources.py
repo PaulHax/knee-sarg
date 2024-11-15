@@ -30,6 +30,7 @@ log = get_dagster_logger()
 DBT_PROJECT_DIR = str(Path(__file__).parent.resolve() / ".." / "dbt")
 DATA_DIR = Path(__file__).parent.resolve() / ".." / "data"
 DATABASE_PATH = os.getenv("DATABASE_PATH", str(DATA_DIR / "database.duckdb"))
+SLURM_LOGS_DIR = str(DATA_DIR / "slurm-logs")
 
 OAI_COLLECTION_NAME = "oai"
 
@@ -502,10 +503,57 @@ class OaiPipelineSubprocess(OaiPipeline):
         log.info(f"Running pipeline: {run_call}")
         log.info(f"With env setup: {command}")
 
-        result = subprocess.run(command, cwd=src_dir, shell=True, capture_output=True)
+        result = subprocess.run(
+            command, cwd=src_dir, shell=True, capture_output=True, text=True
+        )
         log.info(result.stdout)
         if result.stderr:
             log.error(result.stderr)
+
+
+class OaiPipelineSlurm(OaiPipeline):
+    pipeline_src_dir: str
+    sbatch_args: str = ""
+
+    def run_pipeline(
+        self,
+        image_path: str,
+        output_dir: str,
+        laterality: str,
+        run_id: str,  # run id
+        override_src_dir: Optional[str] = None,
+    ):
+        src_dir = override_src_dir or self.pipeline_src_dir
+        command = f'sbatch --parsable --wait --output="{SLURM_LOGS_DIR}/output_%j.log" --error="{SLURM_LOGS_DIR}/error_%j.log" --job-name=oai-analysis-{run_id} {self.sbatch_args} ./scripts/cartilage-thickness-slurm.sh "{image_path}" "{output_dir}" {laterality} "{src_dir}"'
+        log.info(f"Pipeline command:\n{command}")
+
+        result = subprocess.run(command, shell=True, capture_output=True, text=True)
+
+        job_id = result.stdout.strip()
+
+        output_file = f"{SLURM_LOGS_DIR}/output_{job_id}.log"
+        error_file = f"{SLURM_LOGS_DIR}/error_{job_id}.log"
+
+        if os.path.exists(output_file):
+            with open(output_file, "r") as f:
+                output_content = f.read()
+                if output_content:
+                    log.info(output_content)
+        else:
+            log.error(f"Output file {output_file} not found.")
+
+        if os.path.exists(error_file):
+            with open(error_file, "r") as f:
+                error_content = f.read()
+                if error_content:
+                    log.error(error_content)
+        else:
+            log.error(f"Error file {error_file} not found.")
+
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"Slurm sbatch failed with return code {result.returncode}"
+            )
 
 
 class CollectionPublisher(ConfigurableResource):
