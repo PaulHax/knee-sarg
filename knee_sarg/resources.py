@@ -303,8 +303,6 @@ class OAISampler(ConfigurableResource):
 
                             study_instance_uid = meta["0020|000d"]
                             series_instance_uid = meta["0020|000e"]
-                            log.info(f"Study Instance UID: {study_instance_uid}")
-                            log.info(f"Series Instance UID: {series_instance_uid}")
 
                             output_dir = (
                                 self.file_storage.staged_path
@@ -330,36 +328,28 @@ class OAISampler(ConfigurableResource):
                             )
 
                             studies_table = pd.DataFrame(
-                                columns=[
-                                    "patient_id",
-                                    "study_instance_uid",
-                                    "study_date",
-                                    "study_description",
-                                ]
-                            ).astype(
-                                {
-                                    "patient_id": "string",
-                                    "study_instance_uid": "string",
-                                    "study_date": "string",
-                                    "study_description": "string",
-                                }
+                                [
+                                    {
+                                        "patient_id": patient_id,
+                                        "study_instance_uid": study_instance_uid,
+                                        "study_date": study_date,
+                                        "study_description": study_description,
+                                    }
+                                ],
+                                dtype="string",
                             )
-                            studies_table.loc[len(studies_table)] = {
-                                "patient_id": patient_id,
-                                "study_instance_uid": study_instance_uid,
-                                "study_date": study_date,
-                                "study_description": study_description,
-                            }
 
                             series_table = pd.DataFrame(
-                                columns=[
-                                    "patient_id",
-                                    "study_instance_uid",
-                                    "series_instance_uid",
-                                    "series_number",
-                                    "modality",
-                                    "body_part_examined",
-                                    "series_description",
+                                [
+                                    {
+                                        "patient_id": patient_id,
+                                        "study_instance_uid": study_instance_uid,
+                                        "series_instance_uid": series_instance_uid,
+                                        "series_number": series_number,
+                                        "modality": modality,
+                                        "body_part_examined": body_part_examined,
+                                        "series_description": series_description,
+                                    }
                                 ]
                             ).astype(
                                 {
@@ -372,15 +362,6 @@ class OAISampler(ConfigurableResource):
                                     "series_description": "string",
                                 }
                             )
-                            series_table.loc[len(series_table)] = {
-                                "patient_id": patient_id,
-                                "study_instance_uid": study_instance_uid,
-                                "series_instance_uid": series_instance_uid,
-                                "series_number": series_number,
-                                "modality": modality,
-                                "body_part_examined": body_part_examined,
-                                "series_description": series_description,
-                            }
 
                             staged_study_path = (
                                 self.file_storage.staged_path
@@ -390,15 +371,19 @@ class OAISampler(ConfigurableResource):
                                 / study_instance_uid
                             )
 
-                            row = patients_df.loc[
+                            patient_info = patients_df.loc[
                                 patients_df["patient_id"] == int(patient_id)
                             ].iloc[0]
-                            row["patient_id"] = patient_id
+                            patient_info["patient_id"] = patient_id
 
-                            result.loc[len(result)] = row
+                            result.loc[len(result)] = patient_info
 
                             with open(staged_study_path / "patient.json", "w") as fp:
-                                fp.write(pd.DataFrame({0: row}).to_json())
+                                fp.write(
+                                    pd.DataFrame([patient_info]).to_json(
+                                        orient="records"
+                                    )
+                                )
 
                             with open(staged_study_path / "study.json", "w") as fp:
                                 fp.write(studies_table.to_json())

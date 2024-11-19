@@ -134,7 +134,7 @@ def ingested_study_table(
     ingested_patient_path = file_storage.ingested_path / collection_name / patient_id
     study_path = ingested_patient_path / study_uid
 
-    patient = pd.read_json(study_path / "patient.json", orient="index")
+    patient = pd.read_json(study_path / "patient.json", orient="rows")
     patient = patient.rename(columns=clean_column_name)
     patient = convert_date_columns(patient)
     log.info(f"Ingesting study for patient: {patient_id}")
