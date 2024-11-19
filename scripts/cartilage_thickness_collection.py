@@ -45,7 +45,7 @@ class FilePaths:
         collection: str,
         dir_info: StudyInfo,
         analysis_name: str,
-        code_version: str = "undefined",
+        code_version: str = "None",
     ) -> Path:
         patient, study_description, study_uid = (
             dir_info["patient"],
@@ -76,8 +76,12 @@ class FilePaths:
         return output_dir
 
 
+def get_root_dir():
+    return os.getenv("FILE_STORAGE_ROOT", DATA_DIR)
+
+
 def get_oai_collection_dir():
-    root_dir = os.getenv("FILE_STORAGE_ROOT", DATA_DIR)
+    root_dir = get_root_dir()
     return Path(root_dir) / "collections" / "oai"
 
 
@@ -109,6 +113,18 @@ def get_computed_files_dir(study_uid: str, code_version: str = ""):
     """Gets most recent run"""
     run = get_run(study_uid, code_version)
     return run["computed_files_dir"]
+
+
+def get_patient_id(study_uid: str):
+    import duckdb
+
+    db_file = str(Path(DATA_DIR) / "database.duckdb")
+    conn = duckdb.connect(db_file)
+    query = (
+        f"SELECT patient_id FROM oai_studies WHERE study_instance_uid = '{study_uid}'"
+    )
+    result = conn.execute(query)
+    return result.fetchone()[0]
 
 
 if __name__ == "__main__":
