@@ -2,12 +2,15 @@ from typing import Dict, Any
 import os
 from pathlib import Path
 import pandas as pd
+from dotenv import load_dotenv
 
 DATA_DIR = "data"  # if no env var, default directory where collections directory lives
 
 StudyInfo = Dict[str, Any]
 
 THICKNESS_IMAGES = ["FC_thickness.png", "TC_thickness.png"]
+
+load_dotenv()
 
 
 class FilePaths:
@@ -89,7 +92,7 @@ def get_runs():
     return pd.read_parquet(runs_file)
 
 
-def get_output_dir(study_uid: str, code_version: str = ""):
+def get_run(study_uid: str, code_version: str = ""):
     """Gets most recent run"""
     runs = get_runs()
 
@@ -99,6 +102,14 @@ def get_output_dir(study_uid: str, code_version: str = ""):
         ].iloc[-1]
     else:
         matched_row = runs[(runs["study_uid"] == study_uid)].iloc[-1]
+    return matched_row
 
-    output_dir = matched_row["output_dir"]
-    return output_dir
+
+def get_computed_files_dir(study_uid: str, code_version: str = ""):
+    """Gets most recent run"""
+    run = get_run(study_uid, code_version)
+    return run["computed_files_dir"]
+
+
+if __name__ == "__main__":
+    print(get_computed_files_dir("1.3.12.2.1107.5.2.13.20576.4.0.9005364411762704"))

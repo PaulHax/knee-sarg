@@ -1,7 +1,6 @@
 import os
 import shutil
 import argparse
-from dotenv import load_dotenv
 from cartilage_thickness_collection import (
     get_oai_collection_dir,
     get_runs,
@@ -40,8 +39,6 @@ def collect_images(output_dir, image_files, max_runs):
 
 
 if __name__ == "__main__":
-    load_dotenv()
-
     output_dir_default = str(get_oai_collection_dir() / "all-images")
 
     parser = argparse.ArgumentParser(description="Collect images from runs.")
