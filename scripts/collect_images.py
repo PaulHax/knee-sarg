@@ -16,7 +16,7 @@ def collect_images(output_dir, image_files, max_runs):
     for _, run in runs.iterrows():
         patient_id = run["patient_id"]
         computed_dir = run["computed_files_dir"]
-        study_description = computed_dir.split("/")[-3].split("-")[0]
+        study_description = computed_dir.split(os.sep)[-3].split("-")[0]
 
         # study description examples: OAI^MR^12 MONTH^LEFT OAI^MR^24 MONTH^RIGHT OAI^MR^ENROLLMENT^LEFT
         is_left = study_description.find("LEFT") > -1
