@@ -119,6 +119,12 @@ def ingested_study_files(
     return config_to_dataframe(config)
 
 
+def read_json(path: Path) -> pd.DataFrame:
+    with open(path) as f:
+        data = json.load(f)
+    return pd.read_json(json.dumps([data]))
+
+
 @asset(
     partitions_def=study_uid_partitions_def, metadata={"partition_expr": "study_uid"}
 )
@@ -134,18 +140,18 @@ def ingested_study_table(
     ingested_patient_path = file_storage.ingested_path / collection_name / patient_id
     study_path = ingested_patient_path / study_uid
 
-    patient = pd.read_json(study_path / "patient.json", orient="rows")
+    patient = read_json(study_path / "patient.json")
     patient = patient.rename(columns=clean_column_name)
     patient = convert_date_columns(patient)
     log.info(f"Ingesting study for patient: {patient_id}")
     collection_tables.insert_into_collection(collection_name, "patients", patient)
 
-    study = pd.read_json(study_path / "study.json", orient="rows")
+    study = read_json(study_path / "study.json")
     study = study.rename(columns=clean_column_name)
     study = convert_date_columns(study)
     collection_tables.insert_into_collection(collection_name, "studies", study)
 
-    series = pd.read_json(study_path / "series.json", orient="rows")
+    series = read_json(study_path / "series.json")
     series = series.rename(columns=clean_column_name)
     collection_tables.insert_into_collection(collection_name, "series", series)
 
@@ -156,7 +162,7 @@ def ingested_study_table(
                     "collection_name": collection_name,
                     "patient_id": patient_id,
                     "study_uid": study_uid,
-                    "series_uid": series["series_instance_uid"].iloc[0],
+                    "series_uid": series["series_uid"].iloc[0],
                     "study_description": study["study_description"].iloc[0],
                 }
             ]

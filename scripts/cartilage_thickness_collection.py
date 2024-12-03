@@ -1,5 +1,6 @@
 from typing import Dict, Any
 import os
+import shutil
 from pathlib import Path
 import pandas as pd
 from dotenv import load_dotenv
@@ -72,7 +73,14 @@ class FilePaths:
             collection, dir_info, analysis_name, code_version
         )
         if not output_dir.exists():
-            output_dir.mkdir(parents=True, exist_ok=True)
+            output_dir.mkdir(parents=True)
+        else:
+            # clean out the directory
+            for item in output_dir.iterdir():
+                if item.is_file() or item.is_symlink():
+                    item.unlink()
+                elif item.is_dir():
+                    shutil.rmtree(item)
         return output_dir
 
 
@@ -120,9 +128,7 @@ def get_patient_id(study_uid: str):
 
     db_file = str(Path(DATA_DIR) / "database.duckdb")
     conn = duckdb.connect(db_file)
-    query = (
-        f"SELECT patient_id FROM oai_studies WHERE study_instance_uid = '{study_uid}'"
-    )
+    query = f"SELECT patient_id FROM oai_studies WHERE study_uid = '{study_uid}'"
     result = conn.execute(query)
     return result.fetchone()[0]
 
