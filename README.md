@@ -149,6 +149,16 @@ To re-run a study UID that has already been added to the JSON file, clear the ca
 To finds scans that have not been processed by the latest code version, run the cartilage_thickness::has_current_code_version_output check.
 The asset check's output metadata list all ingested study UIDs missing an output directory matching the current code version.
 
+### Post Run Analysis
+
+#### Collect Images in directory
+
+Puts all 2D images in a flat `collections/oai/all-images` directory
+
+```bash
+pixi run collect-images
+```
+
 ## 💡 Principles
 
 -   **Open**: Code, standards, infrastructure, and data, are public and open source.

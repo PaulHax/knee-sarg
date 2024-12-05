@@ -2,6 +2,8 @@
 
 from typing import List
 from pathlib import Path
+import os
+import shutil
 
 import polars as pl
 import pandas as pd
@@ -26,6 +28,7 @@ from ..resources import (
     OaiPipeline,
     CartilageThicknessTable,
     FileStorage,
+    OAI_COLLECTION_NAME,
 )
 from ..assets.ingested_study import (
     study_uid_partitions_def,
@@ -287,3 +290,52 @@ cartilage_thickness_images_notebook = define_dagstermill_asset(
     ),
     ins={"runs": AssetIn("cartilage_thickness_runs")},
 )
+
+
+class CollectImagesConfig(Config):
+    out_dir: str = Field(
+        default_factory=lambda: "all-images",
+        description="Directory under collections/oai to put images in",
+    )
+    files_to_collect: List[str] = Field(
+        default_factory=lambda: THICKNESS_IMAGES,
+        description="Name of files in each case's cartilage_thickness directory that are to be copied into out_dir",
+    )
+
+
+@asset()
+def collected_images(
+    cartilage_thickness_runs: pl.DataFrame,
+    config: CollectImagesConfig,
+    file_storage: FileStorage,
+) -> None:
+    """
+    All 2D images in one directory under collections/oai/all_images.
+    """
+    out_dir = file_storage.collections_path / OAI_COLLECTION_NAME / config.out_dir
+    out_dir.mkdir(parents=True, exist_ok=True)
+    files_to_collect = config.files_to_collect
+
+    for _, run in cartilage_thickness_runs.to_pandas().iterrows():
+        patient_id = run["patient_id"]
+        computed_dir = run["computed_files_dir"]
+        study_description = computed_dir.split(os.sep)[-3].split("-")[0]
+
+        # study description examples: "OAI^MR^12 MONTH^LEFT" "OAI^MR^24 MONTH^RIGHT" "OAI^MR^ENROLLMENT^LEFT"
+        is_left = study_description.find("LEFT") > -1
+        laterality = "left" if is_left else "right"
+
+        month = study_description.split("^")[2]
+        if month == "ENROLLMENT":
+            month = "00 MONTH"
+
+        for file_name in files_to_collect:
+            src_path = os.path.join(computed_dir, file_name)
+            if os.path.exists(src_path):
+                name, extension = os.path.splitext(file_name)
+                code_version = run["code_version"]
+                new_filename = f"{code_version}-{name}-{patient_id}-{laterality}-{month}{extension}"
+                dest_path = os.path.join(out_dir, new_filename)
+                shutil.copy(src_path, dest_path)
+            else:
+                print(f"File not found: {src_path}")

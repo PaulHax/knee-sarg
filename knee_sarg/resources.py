@@ -285,9 +285,12 @@ class OAISampler(ConfigurableResource):
             for study in [study for study in folder.iterdir() if study.is_dir()]:
                 for patient_dir in study.iterdir():
                     if patient_dir.match(patient_id):
-                        acquisition_id = patient_dir.relative_to(folder)
+                        acquisition_id = str(patient_dir.relative_to(folder)).replace(
+                            "\\",  # when Windows uses backslash, convert to Linux style
+                            "/",
+                        )
                         acquisition_dess = dess_df["Folder"].str.contains(
-                            str(acquisition_id).replace("\\", "/")  # Windows uses backslash
+                            acquisition_id
                         )
                         acquisition_df = dess_df.loc[acquisition_dess, :]
                         log.info(f"Fetching images for patient {patient_id}")
