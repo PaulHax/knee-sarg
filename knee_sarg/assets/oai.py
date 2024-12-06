@@ -150,15 +150,8 @@ def cartilage_thickness(
         code_version,
     )
 
-    image_path = (
-        ingested_images_root
-        / collection_name
-        / patient_id
-        / study_uid
-        / "nifti"
-        / series_uid
-        / "image.nii.gz"
-    )
+    in_study_dir = ingested_images_root / collection_name / patient_id / study_uid
+    image_path = in_study_dir / "nifti" / series_uid / "image.nii.gz"
 
     is_left = study_description.find("LEFT") > -1
     laterality = "left" if is_left else "right"
@@ -179,13 +172,17 @@ def cartilage_thickness(
             f"The following files are missing in computed_files_dir: {missing_files}"
         )
 
+    out_study_dir = output_dir.parent.parent
+    for json_file in in_study_dir.glob("*.json"):
+        shutil.copy(json_file, out_study_dir / json_file.name)
+
     return pl.from_pandas(
         pd.DataFrame(
             [
                 {
                     "patient_id": patient_id,
                     "study_uid": study_uid,
-                    "series_id": series_uid,
+                    "series_uid": series_uid,
                     "computed_files_dir": str(output_dir),
                     "code_version": code_version,
                 }
@@ -194,7 +191,7 @@ def cartilage_thickness(
             {
                 "patient_id": "str",
                 "study_uid": "str",
-                "series_id": "str",
+                "series_uid": "str",
                 "computed_files_dir": "str",
                 "code_version": "str",
             }
