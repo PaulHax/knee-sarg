@@ -13,7 +13,6 @@ from .assets.oai import (
     oai_patient_ids,
     cartilage_thickness,
     cartilage_thickness_runs,
-    cartilage_thickness_images_notebook,
     oai_patient_id_partitions_def,
 )
 
@@ -42,7 +41,6 @@ ingest_and_analyze_study_job = define_asset_job(
         ingested_study_table,
         cartilage_thickness,
         cartilage_thickness_runs,
-        cartilage_thickness_images_notebook,
     ],
     description="Ingest a study into a collection and run analysis on it",
     partitions_def=study_uid_partitions_def,
@@ -55,7 +53,6 @@ cartilage_thickness_job = define_asset_job(
         ingested_study_table,
         cartilage_thickness,
         cartilage_thickness_runs,
-        cartilage_thickness_images_notebook,
     ],
     description="Run cartilage thickness analysis",
     partitions_def=study_uid_partitions_def,
