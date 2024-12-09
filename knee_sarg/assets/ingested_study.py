@@ -14,6 +14,7 @@ from dagster import asset, get_dagster_logger, Config, DynamicPartitionsDefiniti
 from slugify import slugify
 
 from ..resources import CollectionTables, FileStorage
+from io import StringIO
 
 log = get_dagster_logger()
 
@@ -122,7 +123,7 @@ def ingested_study_files(
 def read_json(path: Path) -> pd.DataFrame:
     with open(path) as f:
         data = json.load(f)
-    return pd.read_json(json.dumps([data]))
+    return pd.read_json(StringIO(json.dumps([data])))
 
 
 @asset(

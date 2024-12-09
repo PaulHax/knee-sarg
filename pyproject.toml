@@ -3,10 +3,10 @@ name = "knee-sarg"
 version = "1.0.0"
 authors = [{ name = "Matt McCormick" }]
 dependencies = [
-    "dagster-dbt==0.23.16",
-    "dagster-duckdb-polars==0.23.16",
+    "dagster-dbt>=0.25.4",
+    "dagster-duckdb-polars>=0.25.3",
     "dagster-duckdb",
-    "dagster>=1.7,<2.0",
+    "dagster>=1.9,<2.0",
     "dagster-ssh",
     "datasets",
     "dbt-core",
@@ -21,7 +21,7 @@ dependencies = [
     "dagstermill"
 ]
 
-requires-python = ">=3.11, <=3.13"
+requires-python = ">=3.11, <3.13"
 readme = "README.md"
 license = { text = "MIT" }
 
