@@ -12,7 +12,9 @@ from dagster_duckdb import DuckDBResource
 from dagster_ssh import SSHResource
 from dagstermill import ConfigurableLocalOutputNotebookIOManager
 
-from .assets import huggingface, oai, ingested_study
+from .ingest import ingested_study
+
+from .assets import huggingface, oai
 
 from .resources import (
     # DBT_PROJECT_DIR,

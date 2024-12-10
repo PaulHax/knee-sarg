@@ -2,7 +2,7 @@ from dagster import (
     define_asset_job,
 )
 
-from .assets.ingested_study import (
+from .ingest.ingested_study import (
     ingested_study_files,
     ingested_study_table,
     ingested_study_table_oai,

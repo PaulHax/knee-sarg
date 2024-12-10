@@ -22,6 +22,7 @@ from huggingface_hub import HfApi
 import pyarrow.csv as csv
 import itk
 
+from .ingest.ingest_dicom import dicom_to_ingested
 from scripts.cartilage_thickness_collection import FilePaths
 
 log = get_dagster_logger()
@@ -271,23 +272,9 @@ class OAISampler(ConfigurableResource):
         return target_patients
 
     # patient ids: "9000798", "9007827", "9016304"
-    def get_samples(self, patient_id: str) -> pd.DataFrame:
+    def get_samples(self, patient_id: str) -> None:
         dess_file = DATA_DIR / "oai-sampler" / "SEG_3D_DESS_all.csv"
         dess_df = pd.read_csv(dess_file)
-
-        patient_info = self.get_patient_info(patient_id)
-
-        from_patient_info = ["gender"]
-        result = pd.DataFrame(
-            columns=[*from_patient_info, "patient_id", "study_uid", "month"]
-        ).astype(
-            {
-                "patient_id": "string",
-                "study_uid": "string",
-                "gender": "string",
-                "month": "int32",
-            }
-        )
 
         for month, time_point_folder in self.get_time_point_folders().items():
             folder = Path(self.oai_data_root) / Path(time_point_folder) / "results"
@@ -312,50 +299,7 @@ class OAISampler(ConfigurableResource):
 
                             frame_0 = itk.imread(vol_folder / os.listdir(vol_folder)[0])
                             meta = dict(frame_0)
-                            image = itk.imread(str(vol_folder))
-
                             study_uid = meta["0020|000d"]
-                            series_uid = meta["0020|000e"]
-
-                            output_dir = (
-                                self.file_storage.staged_path
-                                / "oai"
-                                / "dagster"
-                                / str(patient_id)
-                                / str(study_uid)
-                            )
-                            os.makedirs(output_dir, exist_ok=True)
-
-                            study_date = meta.get("0008|0020", "00000000")
-                            study_date = (
-                                f"{study_date[4:6]}-{study_date[6:8]}-{study_date[:4]}"
-                            )
-                            study_description = meta.get("0008|1030", "").strip()
-                            series_number = meta.get("0020|0011", "0")
-                            series_number = int(series_number)
-                            modality = meta.get("0008|0060", "").strip()
-                            body_part_examined = meta.get("0018|0015", "")
-                            series_description = meta.get("0008|103e", "").strip()
-                            log.info(
-                                f"{study_date} {study_description} {series_number} {modality} {body_part_examined} {series_description}"
-                            )
-
-                            study = {
-                                "patient_id": patient_id,
-                                "study_uid": study_uid,
-                                "study_date": study_date,
-                                "study_description": study_description,
-                            }
-
-                            series = {
-                                "patient_id": patient_id,
-                                "study_uid": study_uid,
-                                "series_uid": series_uid,
-                                "series_number": series_number,
-                                "modality": modality,
-                                "body_part_examined": body_part_examined,
-                                "series_description": series_description,
-                            }
 
                             staged_study_path = (
                                 self.file_storage.staged_path
@@ -364,31 +308,13 @@ class OAISampler(ConfigurableResource):
                                 / patient_id
                                 / study_uid
                             )
+                            dicom_to_ingested(vol_folder, staged_study_path, patient_id)
 
-                            patient_info["month"] = month
-                            patient_info.to_json(
+                            patient_collection_info = self.get_patient_info(patient_id)
+                            patient_collection_info["month"] = month
+                            patient_collection_info.to_json(
                                 path_or_buf=staged_study_path / "oai.json",
                             )
-
-                            patient_json = patient_info[from_patient_info]
-                            patient_json["patient_id"] = patient_id
-                            result.loc[len(result)] = patient_json
-
-                            patient_json.to_json(
-                                path_or_buf=staged_study_path / "patient.json",
-                            )
-
-                            with open(staged_study_path / "study.json", "w") as f:
-                                json.dump(study, f)
-
-                            with open(staged_study_path / "series.json", "w") as f:
-                                json.dump(series, f)
-
-                            nifti_path = staged_study_path / "nifti" / series_uid
-                            os.makedirs(nifti_path, exist_ok=True)
-                            itk.imwrite(image, nifti_path / "image.nii.gz")
-
-        return result
 
 
 class OaiPipeline(ConfigurableResource, ABC):

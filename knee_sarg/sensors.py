@@ -1,5 +1,6 @@
 import os
 import json
+from pathlib import Path
 
 from dagster import (
     sensor,
@@ -10,9 +11,9 @@ from dagster import (
     SensorEvaluationContext,
 )
 
-from .assets.ingested_study import study_uid_partitions_def
+from .ingest.ingested_study import study_uid_partitions_def
 from .assets.oai import oai_patient_id_partitions_def
-from .resources import OAISampler, FileStorage, DATA_DIR
+from .resources import FileStorage, DATA_DIR
 from .jobs import (
     ingest_and_analyze_study_job,
     stage_oai_sample_job,
@@ -89,7 +90,7 @@ def staged_study_sensor(context: SensorEvaluationContext, file_storage: FileStor
     job=stage_oai_sample_job,
     default_status=DefaultSensorStatus.RUNNING,
 )
-def patient_id_sensor(context: SensorEvaluationContext, oai_sampler: OAISampler):
+def patient_id_sensor(context: SensorEvaluationContext):
     """
     Watches JSON file for Patient IDs, then creates patient_id partitions and runs oai_sample,
     only for IDs not already processed (stored in context.cursor).
@@ -99,7 +100,12 @@ def patient_id_sensor(context: SensorEvaluationContext, oai_sampler: OAISampler)
     cursor_ids = json.loads(context.cursor) if context.cursor else []
 
     # check for new patient IDs
-    ids = oai_sampler.get_patient_ids()
+    file_path = Path(DATA_DIR) / "oai-sampler" / "patient_ids.json"
+    if not os.path.exists(file_path):
+        return []
+    with open(file_path, "r") as fp:
+        ids = json.load(fp)
+
     new_ids = [id for id in ids if id not in cursor_ids]
 
     run_requests = [

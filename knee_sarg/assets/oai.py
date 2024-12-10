@@ -5,6 +5,7 @@ from pathlib import Path
 import os
 import shutil
 
+import json
 import polars as pl
 import pandas as pd
 from dagster import (
@@ -20,8 +21,6 @@ from dagster import (
 )
 from dagstermill import define_dagstermill_asset
 from pydantic import Field
-import itk
-import json
 
 from scripts.cartilage_thickness_collection import THICKNESS_IMAGES
 
@@ -31,10 +30,12 @@ from ..resources import (
     CartilageThicknessTable,
     FileStorage,
     OAI_COLLECTION_NAME,
+    DATA_DIR,
 )
-from ..assets.ingested_study import (
+from ..ingest.ingested_study import (
     study_uid_partitions_def,
 )
+from ..ingest.ingest_dicom import dicom_to_ingested
 
 log = get_dagster_logger()
 
@@ -50,13 +51,16 @@ class OaiPatientIdsConfig(Config):
 
 @asset()
 def oai_patient_ids(
-    oai_sampler: OAISampler,
     config: OaiPatientIdsConfig,
 ) -> pl.DataFrame:
     """
     Reads OAI Patient IDs from a JSON file. Default file is DATA/oai-sampler/patient_small.json.
     """
-    ids = oai_sampler.get_patient_ids(config.patient_id_file)
+    file_path = Path(DATA_DIR) / "oai-sampler" / config.patient_id_file
+    if not os.path.exists(file_path):
+        return []
+    with open(file_path, "r") as fp:
+        ids = json.load(fp)
 
     return pl.from_pandas(
         pd.DataFrame(
@@ -78,16 +82,13 @@ def oai_patient_ids(
 def oai_samples(
     oai_sampler: OAISampler,
     oai_patient_ids: pl.DataFrame,
-) -> pl.DataFrame:
+) -> None:
     """
     OAI Samples. Samples are placed in data/staged/oai/dagster/.
     """
     patient_ids = oai_patient_ids["patient_id"]
-    all_series = pd.concat(
-        [oai_sampler.get_samples(patient_id) for patient_id in patient_ids],
-        ignore_index=True,
-    )
-    return pl.from_pandas(all_series)
+    for patient_id in patient_ids:
+        oai_sampler.get_samples(patient_id)
 
 
 @asset(partitions_def=oai_patient_id_partitions_def)
@@ -100,56 +101,6 @@ def oai_sample(
     """
     patient_id = context.partition_key
     oai_sampler.get_samples(patient_id)
-
-
-def dicom_to_ingested(vol_folder: Path, out_dir: Path, patient_id: str) -> None:
-    frame_0 = itk.imread(vol_folder / os.listdir(vol_folder)[0])
-    meta = dict(frame_0)
-    image = itk.imread(str(vol_folder))
-
-    study_uid = meta["0020|000d"]
-    series_uid = meta["0020|000e"]
-
-    study_date = meta.get("0008|0020", "00000000")
-    study_date = f"{study_date[4:6]}-{study_date[6:8]}-{study_date[:4]}"
-    study_description = meta.get("0008|1030", "").strip()
-    series_number = meta.get("0020|0011", "0")
-    series_number = int(series_number)
-    modality = meta.get("0008|0060", "").strip()
-    body_part_examined = meta.get("0018|0015", "")
-    series_description = meta.get("0008|103e", "").strip()
-    log.info(
-        f"{study_date} {study_description} {series_number} {modality} {body_part_examined} {series_description}"
-    )
-
-    study = {
-        "patient_id": patient_id,
-        "study_uid": study_uid,
-        "study_date": study_date,
-        "study_description": study_description,
-    }
-
-    series = {
-        "patient_id": patient_id,
-        "study_uid": study_uid,
-        "series_uid": series_uid,
-        "series_number": series_number,
-        "modality": modality,
-        "body_part_examined": body_part_examined,
-        "series_description": series_description,
-    }
-
-    os.makedirs(out_dir, exist_ok=True)
-
-    with open(out_dir / "study.json", "w") as f:
-        json.dump(study, f)
-
-    with open(out_dir / "series.json", "w") as f:
-        json.dump(series, f)
-
-    nifti_path = out_dir / "nifti" / series_uid
-    os.makedirs(nifti_path, exist_ok=True)
-    itk.imwrite(image, nifti_path / "image.nii.gz")
 
 
 @asset(
