@@ -33,6 +33,7 @@ from .jobs import (
     stage_oai_sample_job,
     ingest_and_analyze_study_job,
     cartilage_thickness_job,
+    cartilage_thickness_job_oai,
 )
 
 from .sensors import (
@@ -117,6 +118,7 @@ defs = Definitions(
         stage_oai_sample_job,
         ingest_and_analyze_study_job,
         cartilage_thickness_job,
+        cartilage_thickness_job_oai,
     ],
     sensors=[
         staged_study_sensor,

@@ -65,15 +65,25 @@ class FileStorage(ConfigurableResource):
     def collections_path(self) -> Path:
         return self._file_paths.collections_path
 
+    def ensure_collection_dir(self, collection: str):
+        return self._file_paths.ensure_collection_dir(collection)
+
+    def get_study_collection_dir(
+        self,
+        collection: str,
+        study_info: StudyInfo,
+    ) -> Path:
+        return self._file_paths.get_study_collection_dir(collection, study_info)
+
     def get_output_dir(
         self,
         collection: str,
-        dir_info: StudyInfo,
+        study_info: StudyInfo,
         analysis_name: str,
         code_version: str = "undefined",
     ) -> Path:
         return self._file_paths.get_output_dir(
-            collection, dir_info, analysis_name, code_version
+            collection, study_info, analysis_name, code_version
         )
 
     def make_output_dir(
@@ -112,7 +122,7 @@ class CollectionTables(ConfigurableResource):
                     else:
                         if table == "patients":
                             conn.execute(
-                                f"CREATE TABLE IF NOT EXISTS {table_name} (patient_id VARCHAR, gender VARCHAR);"
+                                f"CREATE TABLE IF NOT EXISTS {table_name} (patient_id VARCHAR);"
                             )
                         elif table == "studies":
                             conn.execute(
@@ -234,9 +244,18 @@ class OAISampler(ConfigurableResource):
         # stack rows from all enrollee01.txt files
         self._patients_df = pd.concat(patients_dfs, ignore_index=True)
 
+        self._study_to_vol_path = pd.read_csv(
+            DATA_DIR / "oai-sampler" / "study_uid_to_vol_path.csv", dtype=str
+        )
+
     def get_patient_info(self, patient_id: str) -> pd.DataFrame:
         return self._patients_df.loc[
             self._patients_df["src_subject_id"] == int(patient_id)
+        ].iloc[0]
+
+    def get_study_info(self, study_uid: str) -> pd.DataFrame:
+        return self._study_to_vol_path.loc[
+            self._study_to_vol_path["study_uid"] == study_uid
         ].iloc[0]
 
     def get_patient_ids(self, file_name: Optional[str] = None) -> List[str]:

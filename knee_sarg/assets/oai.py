@@ -1,6 +1,6 @@
 """NIH Imaging Data Commons (OAI) dataset assets."""
 
-from typing import List
+from typing import List, TypedDict
 from pathlib import Path
 import os
 import shutil
@@ -20,6 +20,8 @@ from dagster import (
 )
 from dagstermill import define_dagstermill_asset
 from pydantic import Field
+import itk
+import json
 
 from scripts.cartilage_thickness_collection import THICKNESS_IMAGES
 
@@ -100,6 +102,94 @@ def oai_sample(
     oai_sampler.get_samples(patient_id)
 
 
+def dicom_to_ingested(vol_folder: Path, out_dir: Path, patient_id: str) -> None:
+    frame_0 = itk.imread(vol_folder / os.listdir(vol_folder)[0])
+    meta = dict(frame_0)
+    image = itk.imread(str(vol_folder))
+
+    study_uid = meta["0020|000d"]
+    series_uid = meta["0020|000e"]
+
+    study_date = meta.get("0008|0020", "00000000")
+    study_date = f"{study_date[4:6]}-{study_date[6:8]}-{study_date[:4]}"
+    study_description = meta.get("0008|1030", "").strip()
+    series_number = meta.get("0020|0011", "0")
+    series_number = int(series_number)
+    modality = meta.get("0008|0060", "").strip()
+    body_part_examined = meta.get("0018|0015", "")
+    series_description = meta.get("0008|103e", "").strip()
+    log.info(
+        f"{study_date} {study_description} {series_number} {modality} {body_part_examined} {series_description}"
+    )
+
+    study = {
+        "patient_id": patient_id,
+        "study_uid": study_uid,
+        "study_date": study_date,
+        "study_description": study_description,
+    }
+
+    series = {
+        "patient_id": patient_id,
+        "study_uid": study_uid,
+        "series_uid": series_uid,
+        "series_number": series_number,
+        "modality": modality,
+        "body_part_examined": body_part_examined,
+        "series_description": series_description,
+    }
+
+    os.makedirs(out_dir, exist_ok=True)
+
+    with open(out_dir / "study.json", "w") as f:
+        json.dump(study, f)
+
+    with open(out_dir / "series.json", "w") as f:
+        json.dump(series, f)
+
+    nifti_path = out_dir / "nifti" / series_uid
+    os.makedirs(nifti_path, exist_ok=True)
+    itk.imwrite(image, nifti_path / "image.nii.gz")
+
+
+@asset(
+    partitions_def=study_uid_partitions_def, metadata={"partition_expr": "study_uid"}
+)
+def oai_study(
+    context: AssetExecutionContext,
+    file_storage: FileStorage,
+    oai_sampler: OAISampler,
+) -> pl.DataFrame:
+    """
+    OAI Sample by study_uid partition. Samples are placed in collections/oai/{patient_id}/{study_uid}.
+    """
+    study_uid = context.partition_key
+    study_info = oai_sampler.get_study_info(study_uid)
+    oai_vol_folder = Path(oai_sampler.oai_data_root) / study_info["vol_path"]
+
+    study_collection_dir = file_storage.get_study_collection_dir(
+        OAI_COLLECTION_NAME, study_info
+    )
+    dicom_to_ingested(oai_vol_folder, study_collection_dir, study_info["patient_id"])
+
+    patient_collection_info = oai_sampler.get_patient_info(study_info["patient_id"])
+    patient_collection_info["month"] = study_info["month"]
+    patient_collection_info.to_json(
+        path_or_buf=study_collection_dir / "oai.json",
+    )
+    return pl.from_pandas(
+        pd.DataFrame(
+            [
+                {
+                    "study_uid": study_uid,
+                    "study_collection_dir": str(study_collection_dir),
+                    "collection_name": OAI_COLLECTION_NAME,
+                }
+            ]
+        )
+    )
+
+
 cartilage_thickness_code_version = EnvVar("CARTILAGE_THICKNESS_CODE_VERSION")
 
 
@@ -110,36 +200,29 @@ class ThicknessImages(Config):
     )
 
 
-@asset(
-    partitions_def=study_uid_partitions_def,
-    metadata={"partition_expr": "study_uid"},
-    code_version=cartilage_thickness_code_version.get_value(),
-)
-def cartilage_thickness(
-    context: AssetExecutionContext,
-    config: ThicknessImages,
-    oai_pipeline: OaiPipeline,
+class IngestedStudy(TypedDict):
+    collection_name: str
+    patient_id: str
+    study_uid: str
+    study_description: str
+    study_path: str
+
+
+def do_cartilage_thickness(
     file_storage: FileStorage,
-    ingested_study_table: pl.DataFrame,
+    oai_pipeline: OaiPipeline,
+    code_version: str,
+    override_src_directory: str | None,
+    ingested_study: IngestedStudy,
+    config: ThicknessImages,
 ) -> pl.DataFrame:
-    """
-    Cartilage Thickness Images. Generates images for a series in data/collections/OAI_COLLECTION_NAME/patient_id/study_uid/cartilage_thickness/series_id.
-    """
-    study_uid = context.partition_key
-    code_version = str(cartilage_thickness_code_version.get_value())
-    if "oai/code-version" in context.run.tags:
-        code_version = context.run.tags["oai/code-version"]
-    override_src_directory = context.run.tags.get("oai/src-directory", None)
-
-    # get image to run the pipeline on
-    ingested_images_root: Path = file_storage.ingested_path
-
-    collection_name, patient_id, study_uid, series_uid, study_description = (
-        ingested_study_table.row(0)
-    )
-
+    collection_name = ingested_study["collection_name"]
+    patient_id = ingested_study["patient_id"]
+    study_uid = ingested_study["study_uid"]
+    study_description = ingested_study["study_description"]
+    study_path = ingested_study["study_path"]
     study_dir_info = {
-        "patient": patient_id,
+        "patient_id": patient_id,
         "study_description": study_description,
         "study_uid": study_uid,
     }
@@ -150,7 +233,9 @@ def cartilage_thickness(
         code_version,
     )
 
-    in_study_dir = ingested_images_root / collection_name / patient_id / study_uid
+    in_study_dir = Path(study_path)
+    # assume one series folder
+    series_uid = next((in_study_dir / "nifti").iterdir())
     image_path = in_study_dir / "nifti" / series_uid / "image.nii.gz"
 
     is_left = study_description.find("LEFT") > -1
@@ -173,7 +258,12 @@ def cartilage_thickness(
         )
 
     out_study_dir = output_dir.parent.parent
-    for json_file in in_study_dir.glob("*.json"):
+    files_to_copy = [
+        json_file
+        for json_file in in_study_dir.glob("*.json")
+        if not (out_study_dir / json_file.name).exists()
+    ]
+    for json_file in files_to_copy:
         shutil.copy(json_file, out_study_dir / json_file.name)
 
     return pl.from_pandas(
@@ -196,6 +286,86 @@ def cartilage_thickness(
                 "code_version": "str",
             }
         )
+    )
+
+
+@asset(
+    partitions_def=study_uid_partitions_def,
+    metadata={"partition_expr": "study_uid"},
+    code_version=cartilage_thickness_code_version.get_value(),
+)
+def cartilage_thickness(
+    context: AssetExecutionContext,
+    config: ThicknessImages,
+    oai_pipeline: OaiPipeline,
+    file_storage: FileStorage,
+    ingested_study_table: pl.DataFrame,
+) -> pl.DataFrame:
+    """
+    Cartilage Thickness Images. Generates images for a series in data/collections/OAI_COLLECTION_NAME/patient_id/study_uid/cartilage_thickness/series_id.
+    """
+    code_version = str(cartilage_thickness_code_version.get_value())
+    if "oai/code-version" in context.run.tags:
+        code_version = context.run.tags["oai/code-version"]
+    override_src_directory = context.run.tags.get("oai/src-directory", None)
+
+    collection_name, patient_id, study_uid, study_description, study_path = (
+        ingested_study_table.row(0)
+    )
+    ingested_study = IngestedStudy(
+        collection_name=collection_name,
+        patient_id=patient_id,
+        study_uid=study_uid,
+        study_description=study_description,
+        study_path=study_path,
+    )
+    return do_cartilage_thickness(
+        file_storage,
+        oai_pipeline,
+        code_version,
+        override_src_directory,
+        ingested_study,
+        config,
+    )
+
+
+@asset(
+    partitions_def=study_uid_partitions_def,
+    metadata={"partition_expr": "study_uid"},
+    code_version=cartilage_thickness_code_version.get_value(),
+)
+def cartilage_thickness_oai(
+    context: AssetExecutionContext,
+    config: ThicknessImages,
+    oai_pipeline: OaiPipeline,
+    file_storage: FileStorage,
+    ingested_study_table_oai: pl.DataFrame,
+) -> pl.DataFrame:
+    """
+    Cartilage Thickness Images. Generates images for a series in collections/collection_name/patient_id/study_uid/cartilage_thickness/code_version.
+    """
+    code_version = str(cartilage_thickness_code_version.get_value())
+    if "oai/code-version" in context.run.tags:
+        code_version = context.run.tags["oai/code-version"]
+    override_src_directory = context.run.tags.get("oai/src-directory", None)
+
+    collection_name, patient_id, study_uid, study_description, study_path = (
+        ingested_study_table_oai.row(0)
+    )
+    ingested_study = IngestedStudy(
+        collection_name=collection_name,
+        patient_id=patient_id,
+        study_uid=study_uid,
+        study_description=study_description,
+        study_path=study_path,
+    )
+    return do_cartilage_thickness(
+        file_storage,
+        oai_pipeline,
+        code_version,
+        override_src_directory,
+        ingested_study,
+        config,
     )
 
 
@@ -251,6 +421,24 @@ def cartilage_thickness_runs(
     cartilage_thickness_table.insert_run(run)
     cartilage_thickness_table.write_incremental_parquet(run)
     return cartilage_thickness
+
+
+@asset(
+    partitions_def=study_uid_partitions_def,
+    metadata={"partition_expr": "study_uid"},
+)
+def cartilage_thickness_runs_oai(
+    cartilage_thickness_oai: pl.DataFrame,
+    cartilage_thickness_table: CartilageThicknessTable,
+) -> pl.DataFrame:
+    """
+    Cartilage Thickness Run Statuses. Parquet table holding the status of cartilage thickness runs.
+    Saved in data/collections/OAI_COLLECTION_NAME/cartilage_thickness_runs.parquet.
+    """
+    run = cartilage_thickness_oai.to_pandas()
+    cartilage_thickness_table.insert_run(run)
+    cartilage_thickness_table.write_incremental_parquet(run)
+    return cartilage_thickness_oai
 
 
 @asset_check(asset=cartilage_thickness_runs)

@@ -1,4 +1,5 @@
-from typing import Dict, Any
+from typing import TypedDict
+
 import os
 import shutil
 from pathlib import Path
@@ -7,7 +8,12 @@ from dotenv import load_dotenv
 
 DATA_DIR = "data"  # if no env var, default directory where collections directory lives
 
-StudyInfo = Dict[str, Any]
+
+class StudyInfo(TypedDict):
+    patient_id: str
+    study_description: str
+    study_uid: str
+
 
 THICKNESS_IMAGES = ["FC_thickness.png", "TC_thickness.png"]
 
@@ -41,24 +47,39 @@ class FilePaths:
     def collections_path(self) -> Path:
         return self._collections_path
 
-    def get_output_dir(
+    def get_collection_path(self, collection: str) -> Path:
+        return self.collections_path / collection
+
+    def ensure_collection_dir(self, collection: str):
+        collection_dir = self.get_collection_path(collection)
+        if not collection_dir.exists():
+            collection_dir.mkdir(parents=True)
+        return collection_dir
+
+    def get_study_collection_dir(
         self,
         collection: str,
-        dir_info: StudyInfo,
-        analysis_name: str,
-        code_version: str = "None",
+        study_info: StudyInfo,
     ) -> Path:
         patient, study_description, study_uid = (
-            dir_info["patient"],
-            dir_info["study_description"],
-            dir_info["study_uid"],
+            study_info["patient_id"],
+            study_info["study_description"],
+            study_info["study_uid"],
         )
-        study_dir = (
-            self.collections_path
-            / collection
+        return (
+            self.get_collection_path(collection)
             / patient
             / f"{study_description}-{study_uid}"
         )
+
+    def get_output_dir(
+        self,
+        collection: str,
+        study_info: StudyInfo,
+        analysis_name: str,
+        code_version: str = "None",
+    ) -> Path:
+        study_dir = self.get_study_collection_dir(collection, study_info)
         output_dir = study_dir / analysis_name / code_version
         return output_dir
 

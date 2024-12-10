@@ -126,6 +126,40 @@ def read_json(path: Path) -> pd.DataFrame:
     return pd.read_json(StringIO(json.dumps([data])))
 
 
+def ingest_study_dir(
+    collection_tables: CollectionTables, collection_name: str, study_path: Path
+) -> None:
+    """
+    Ingest a study directory into the collection tables.
+    """
+    study_json = read_json(study_path / "study.json")
+    study = study_json.rename(columns=clean_column_name)
+    study = convert_date_columns(study)
+    collection_tables.insert_into_collection(collection_name, "studies", study)
+
+    patient_id = str(study["patient_id"].iloc[0])
+    patient = pd.DataFrame([{"patient_id": patient_id}])
+    collection_tables.insert_into_collection(collection_name, "patients", patient)
+
+    series_json = read_json(study_path / "series.json")
+    series = series_json.rename(columns=clean_column_name)
+    collection_tables.insert_into_collection(collection_name, "series", series)
+
+    return pl.from_pandas(
+        pd.DataFrame(
+            [
+                {
+                    "collection_name": collection_name,
+                    "patient_id": patient_id,
+                    "study_uid": study_json["study_uid"].iloc[0],
+                    "study_description": study_json["study_description"].iloc[0],
+                    "study_path": str(study_path),
+                }
+            ]
+        )
+    )
+
+
 @asset(
     partitions_def=study_uid_partitions_def, metadata={"partition_expr": "study_uid"}
 )
@@ -140,34 +174,22 @@ def ingested_study_table(
     collection_name, uploader, patient_id, study_uid = ingested_study_files.row(0)
     ingested_patient_path = file_storage.ingested_path / collection_name / patient_id
     study_path = ingested_patient_path / study_uid
+    return ingest_study_dir(collection_tables, collection_name, study_path)
 
-    patient = read_json(study_path / "patient.json")
-    patient = patient.rename(columns=clean_column_name)
-    patient = convert_date_columns(patient)
-    log.info(f"Ingesting study for patient: {patient_id}")
-    collection_tables.insert_into_collection(collection_name, "patients", patient)
 
-    study = read_json(study_path / "study.json")
-    study = study.rename(columns=clean_column_name)
-    study = convert_date_columns(study)
-    collection_tables.insert_into_collection(collection_name, "studies", study)
-
-    series = read_json(study_path / "series.json")
-    series = series.rename(columns=clean_column_name)
-    collection_tables.insert_into_collection(collection_name, "series", series)
-
-    return pl.from_pandas(
-        pd.DataFrame(
-            [
-                {
-                    "collection_name": collection_name,
-                    "patient_id": patient_id,
-                    "study_uid": study_uid,
-                    "series_uid": series["series_uid"].iloc[0],
-                    "study_description": study["study_description"].iloc[0],
-                }
-            ]
-        )
+@asset(
+    partitions_def=study_uid_partitions_def, metadata={"partition_expr": "study_uid"}
+)
+def ingested_study_table_oai(
+    collection_tables: CollectionTables,
+    oai_study: pl.DataFrame,
+) -> pl.DataFrame:
+    """
+    Table of ingested studies.
+    """
+    study_uid, study_collection_dir, collection_name = oai_study.row(0)
+    return ingest_study_dir(
+        collection_tables, collection_name, Path(study_collection_dir)
     )
 
 
