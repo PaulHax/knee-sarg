@@ -320,16 +320,8 @@ def cartilage_thickness_oai(
     )
 
 
-@asset_check(asset=cartilage_thickness)
-def has_current_code_version_output(
-    config: ThicknessImages,
-    cartilage_thickness: pl.DataFrame,
-):
-    """
-    For each processed study_uid, check that it has output files with current code version.
-    """
+def get_stale_code_version_study_uids(config: ThicknessImages, runs: pd.DataFrame):
     code_version = str(cartilage_thickness_code_version.get_value())
-    runs = cartilage_thickness.to_pandas()
     run_study_uids = runs["study_uid"].unique()
 
     study_uids_current_code_version = set(
@@ -354,6 +346,30 @@ def has_current_code_version_output(
         passed=len(stale_code_version_study_uids) == 0,
         metadata={"stale_code_version_study_uids": stale_code_version_study_uids},
     )
+
+
+@asset_check(asset=cartilage_thickness)
+def has_current_code_version_output(
+    config: ThicknessImages,
+    cartilage_thickness: pl.DataFrame,
+):
+    """
+    For each processed study_uid, check that it has output files with current code version.
+    """
+    runs = cartilage_thickness.to_pandas()
+    return get_stale_code_version_study_uids(config, runs)
+
+
+@asset_check(asset=cartilage_thickness_oai)
+def has_current_code_version_output_oai(
+    config: ThicknessImages,
+    cartilage_thickness_oai: pl.DataFrame,
+):
+    """
+    For each processed study_uid, check that it has output files with current code version.
+    """
+    runs = cartilage_thickness_oai.to_pandas()
+    return get_stale_code_version_study_uids(config, runs)
 
 
 @asset(
@@ -427,6 +443,16 @@ cartilage_thickness_images_notebook = define_dagstermill_asset(
     ins={"runs": AssetIn("cartilage_thickness_runs")},
 )
 
+cartilage_thickness_images_notebook_oai = define_dagstermill_asset(
+    name="cartilage_thickness_images_notebook_oai",
+    notebook_path=str(
+        Path(__file__).parent.parent.parent
+        / "scripts"
+        / "cartilage_thickness_images.ipynb"
+    ),
+    ins={"runs": AssetIn("cartilage_thickness_runs_oai")},
+)
+
 
 class CollectImagesConfig(Config):
     out_dir: str = Field(
@@ -439,25 +465,15 @@ class CollectImagesConfig(Config):
     )
 
 
-@asset()
-def collected_images(
-    cartilage_thickness_runs: pl.DataFrame,
-    config: CollectImagesConfig,
-    file_storage: FileStorage,
-) -> None:
-    """
-    All 2D images in one directory under collections/oai/all_images.
-    """
+def copy_files_to_output_dir(cartilage_thickness_runs, config, file_storage):
     out_dir = file_storage.collections_path / OAI_COLLECTION_NAME / config.out_dir
     out_dir.mkdir(parents=True, exist_ok=True)
     files_to_collect = config.files_to_collect
-
     for _, run in cartilage_thickness_runs.to_pandas().iterrows():
         patient_id = run["patient_id"]
         computed_dir = run["computed_files_dir"]
         study_description = computed_dir.split(os.sep)[-3].split("-")[0]
 
-        # study description examples: "OAI^MR^12 MONTH^LEFT" "OAI^MR^24 MONTH^RIGHT" "OAI^MR^ENROLLMENT^LEFT"
         is_left = study_description.find("LEFT") > -1
         laterality = "left" if is_left else "right"
 
@@ -475,3 +491,27 @@ def collected_images(
                 shutil.copy(src_path, dest_path)
             else:
                 print(f"File not found: {src_path}")
+
+
+@asset()
+def collected_images(
+    cartilage_thickness_runs: pl.DataFrame,
+    config: CollectImagesConfig,
+    file_storage: FileStorage,
+) -> None:
+    """
+    All 2D images in one directory under collections/oai/all_images.
+    """
+    copy_files_to_output_dir(cartilage_thickness_runs, config, file_storage)
+
+
+@asset()
+def collected_images_oai(
+    cartilage_thickness_runs_oai: pl.DataFrame,
+    config: CollectImagesConfig,
+    file_storage: FileStorage,
+) -> None:
+    """
+    All 2D images in one directory under collections/oai/all_images.
+    """
+    copy_files_to_output_dir(cartilage_thickness_runs_oai, config, file_storage)

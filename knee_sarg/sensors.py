@@ -12,12 +12,11 @@ from dagster import (
 )
 
 from .ingest.ingested_study import study_uid_partitions_def
-from .assets.oai import oai_patient_id_partitions_def
+from .oai.cartilage_thickness import oai_patient_id_partitions_def
 from .resources import FileStorage, DATA_DIR
 from .jobs import (
     ingest_and_analyze_study_job,
     stage_oai_sample_job,
-    cartilage_thickness_job,
 )
 
 
@@ -122,45 +121,5 @@ def patient_id_sensor(context: SensorEvaluationContext):
         run_requests=run_requests,
         dynamic_partitions_requests=[
             oai_patient_id_partitions_def.build_add_request(new_ids)
-        ],
-    )
-
-
-@sensor(
-    job=cartilage_thickness_job,
-    default_status=DefaultSensorStatus.STOPPED,
-)
-def cartilage_thickness_study_uid_file_sensor(context: SensorEvaluationContext):
-    """
-    Watches DATA/oai-sampler/study_uids_to_run.json file for study UIDs, then creates partitions and runs cartilage_thickness_job,
-    only for IDs not already processed (stored in context.cursor).
-    To rerun study UIDs that has already been processed, use the Dagster GUI to clear
-    this sensors cursor.
-    """
-    cursor_ids = json.loads(context.cursor) if context.cursor else []
-
-    # check for new patient IDs
-    json_path = DATA_DIR / "oai-sampler" / "study_uids_to_run.json"
-    if not os.path.exists(json_path):
-        return
-
-    with open(json_path, "r") as fp:
-        study_uids = json.load(fp)
-    new_ids = [id for id in study_uids if id not in cursor_ids]
-
-    run_requests = [
-        RunRequest(
-            partition_key=id,
-        )
-        for id in new_ids
-    ]
-
-    cursor_ids.extend(new_ids)
-    context.update_cursor(json.dumps(cursor_ids))
-
-    return SensorResult(
-        run_requests=run_requests,
-        dynamic_partitions_requests=[
-            study_uid_partitions_def.build_add_request(new_ids)
         ],
     )

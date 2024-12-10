@@ -12,9 +12,11 @@ from dagster_duckdb import DuckDBResource
 from dagster_ssh import SSHResource
 from dagstermill import ConfigurableLocalOutputNotebookIOManager
 
+from .oai import cartilage_thickness, run_triggers
+
 from .ingest import ingested_study
 
-from .assets import huggingface, oai
+from .assets import huggingface
 
 from .resources import (
     # DBT_PROJECT_DIR,
@@ -35,13 +37,12 @@ from .jobs import (
     stage_oai_sample_job,
     ingest_and_analyze_study_job,
     cartilage_thickness_job,
-    cartilage_thickness_job_oai,
+    cartilage_thickness_oai_job,
 )
 
 from .sensors import (
     staged_study_sensor,
     patient_id_sensor,
-    cartilage_thickness_study_uid_file_sensor,
 )
 
 # dbt = DbtCliResource(project_dir=DBT_PROJECT_DIR, profiles_dir=DBT_PROJECT_DIR)
@@ -49,8 +50,12 @@ duckdb_resource = DuckDBResource(database=DATABASE_PATH)
 
 # dbt_assets = load_assets_from_dbt_project(DBT_PROJECT_DIR, DBT_PROJECT_DIR)
 dbt_assets = []
-all_assets = load_assets_from_modules([oai, ingested_study, huggingface])
-all_checks = load_asset_checks_from_modules([oai, ingested_study, huggingface])
+all_assets = load_assets_from_modules(
+    [cartilage_thickness, run_triggers, ingested_study, huggingface]
+)
+all_checks = load_asset_checks_from_modules(
+    [cartilage_thickness, run_triggers, ingested_study, huggingface]
+)
 
 # Use os.getenv to get the environment variable with a default value
 root_dir = os.getenv("FILE_STORAGE_ROOT", str(DATA_DIR))
@@ -120,11 +125,11 @@ defs = Definitions(
         stage_oai_sample_job,
         ingest_and_analyze_study_job,
         cartilage_thickness_job,
-        cartilage_thickness_job_oai,
+        cartilage_thickness_oai_job,
     ],
     sensors=[
         staged_study_sensor,
         patient_id_sensor,
-        cartilage_thickness_study_uid_file_sensor,
+        run_triggers.oai_study_uids_to_run_sensor,
     ],
 )

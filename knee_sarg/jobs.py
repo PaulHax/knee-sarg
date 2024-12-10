@@ -8,7 +8,7 @@ from .ingest.ingested_study import (
     ingested_study_table_oai,
     study_uid_partitions_def,
 )
-from .assets.oai import (
+from .oai.cartilage_thickness import (
     oai_samples,
     oai_sample,
     oai_patient_ids,
@@ -63,8 +63,8 @@ cartilage_thickness_job = define_asset_job(
     tags={"job": "gpu"},
 )
 
-cartilage_thickness_job_oai = define_asset_job(
-    "cartilage_thickness_job_oai",
+cartilage_thickness_oai_job = define_asset_job(
+    "cartilage_thickness_oai_job",
     [
         oai_study,
         ingested_study_table_oai,

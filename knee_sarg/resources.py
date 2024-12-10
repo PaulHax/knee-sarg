@@ -1,6 +1,6 @@
 import os
 import tempfile
-from typing import Dict, Optional, List, Any
+from typing import Dict, Optional, List
 from pathlib import Path
 import shutil
 import json
@@ -23,7 +23,7 @@ import pyarrow.csv as csv
 import itk
 
 from .ingest.ingest_dicom import dicom_to_ingested
-from scripts.cartilage_thickness_collection import FilePaths
+from scripts.cartilage_thickness_collection import FilePaths, StudyInfo
 
 log = get_dagster_logger()
 
@@ -36,8 +36,6 @@ SLURM_LOGS_DIR = str(DATA_DIR / "slurm-logs")
 OAI_COLLECTION_NAME = "oai"
 
 collection_table_names = {"patients", "studies", "series"}
-
-StudyInfo = Dict[str, Any]
 
 
 class FileStorage(ConfigurableResource):
