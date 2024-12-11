@@ -1,12 +1,19 @@
-from typing import Dict, Any
+from typing import TypedDict
+
 import os
+import shutil
 from pathlib import Path
 import pandas as pd
 from dotenv import load_dotenv
 
 DATA_DIR = "data"  # if no env var, default directory where collections directory lives
 
-StudyInfo = Dict[str, Any]
+
+class StudyInfo(TypedDict):
+    patient_id: str
+    study_description: str
+    study_uid: str
+
 
 THICKNESS_IMAGES = ["FC_thickness.png", "TC_thickness.png"]
 
@@ -40,24 +47,39 @@ class FilePaths:
     def collections_path(self) -> Path:
         return self._collections_path
 
-    def get_output_dir(
+    def get_collection_path(self, collection: str) -> Path:
+        return self.collections_path / collection
+
+    def ensure_collection_dir(self, collection: str):
+        collection_dir = self.get_collection_path(collection)
+        if not collection_dir.exists():
+            collection_dir.mkdir(parents=True)
+        return collection_dir
+
+    def get_study_collection_dir(
         self,
         collection: str,
-        dir_info: StudyInfo,
-        analysis_name: str,
-        code_version: str = "None",
+        study_info: StudyInfo,
     ) -> Path:
         patient, study_description, study_uid = (
-            dir_info["patient"],
-            dir_info["study_description"],
-            dir_info["study_uid"],
+            study_info["patient_id"],
+            study_info["study_description"],
+            study_info["study_uid"],
         )
-        study_dir = (
-            self.collections_path
-            / collection
+        return (
+            self.get_collection_path(collection)
             / patient
             / f"{study_description}-{study_uid}"
         )
+
+    def get_output_dir(
+        self,
+        collection: str,
+        study_info: StudyInfo,
+        analysis_name: str,
+        code_version: str = "None",
+    ) -> Path:
+        study_dir = self.get_study_collection_dir(collection, study_info)
         output_dir = study_dir / analysis_name / code_version
         return output_dir
 
@@ -72,7 +94,14 @@ class FilePaths:
             collection, dir_info, analysis_name, code_version
         )
         if not output_dir.exists():
-            output_dir.mkdir(parents=True, exist_ok=True)
+            output_dir.mkdir(parents=True)
+        else:
+            # clean out the directory
+            for item in output_dir.iterdir():
+                if item.is_file() or item.is_symlink():
+                    item.unlink()
+                elif item.is_dir():
+                    shutil.rmtree(item)
         return output_dir
 
 
@@ -120,9 +149,7 @@ def get_patient_id(study_uid: str):
 
     db_file = str(Path(DATA_DIR) / "database.duckdb")
     conn = duckdb.connect(db_file)
-    query = (
-        f"SELECT patient_id FROM oai_studies WHERE study_instance_uid = '{study_uid}'"
-    )
+    query = f"SELECT patient_id FROM oai_studies WHERE study_uid = '{study_uid}'"
     result = conn.execute(query)
     return result.fetchone()[0]
 

@@ -3,10 +3,10 @@ name = "knee-sarg"
 version = "1.0.0"
 authors = [{ name = "Matt McCormick" }]
 dependencies = [
-    "dagster-dbt==0.23.16",
-    "dagster-duckdb-polars==0.23.16",
+    "dagster-dbt>=0.25.4",
+    "dagster-duckdb-polars>=0.25.3",
     "dagster-duckdb",
-    "dagster>=1.7,<2.0",
+    "dagster>=1.9,<2.0",
     "dagster-ssh",
     "datasets",
     "dbt-core",
@@ -21,7 +21,7 @@ dependencies = [
     "dagstermill"
 ]
 
-requires-python = ">=3.11, <=3.13"
+requires-python = ">=3.11, <3.13"
 readme = "README.md"
 license = { text = "MIT" }
 
@@ -64,8 +64,7 @@ default = { solve-group = "default" }
 dev = { features = ["dev"], solve-group = "default" }
 
 [tool.pixi.tasks]
-stage-samples = { cmd = "dagster job execute -j stage_oai_nsclc_radiogenomic_samples -m knee_sarg", description = "Stage OAI Radiogenomic Samples" }
-cartilage-thickness = { cmd = "dagster job backfill -j cartilage_thickness_job", description = "Run cartilage thickness backfill job with passed partitions" }
+cartilage-thickness = { cmd = "dagster job backfill -j cartilage_thickness_oai_job", description = "Run cartilage thickness backfill job with passed partitions" }
 ct-backfill = { cmd = "python scripts/cartilage_thickness_backfill.py", description = "Run cartilage thickness backfill job on given number of partitions" }
 clean = { cmd = "rm -rf data/*.duckdb && rm -rf dbt/target dbt/dbt_packages dbt/logs && find data/dagster_home -mindepth 1 ! -name 'dagster.yaml' -delete", description = "Clean the project artifacts" }
 jupyter = { cmd = "python scripts/start_jupyter.py", description = "Run jupyter notebook" }

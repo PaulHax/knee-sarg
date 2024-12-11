@@ -1,6 +1,6 @@
 import os
 import tempfile
-from typing import Dict, Optional, List, Any
+from typing import Dict, Optional, List
 from pathlib import Path
 import shutil
 import json
@@ -22,7 +22,8 @@ from huggingface_hub import HfApi
 import pyarrow.csv as csv
 import itk
 
-from scripts.cartilage_thickness_collection import FilePaths
+from .ingest.ingest_dicom import dicom_to_ingested
+from scripts.cartilage_thickness_collection import FilePaths, StudyInfo
 
 log = get_dagster_logger()
 
@@ -35,8 +36,6 @@ SLURM_LOGS_DIR = str(DATA_DIR / "slurm-logs")
 OAI_COLLECTION_NAME = "oai"
 
 collection_table_names = {"patients", "studies", "series"}
-
-StudyInfo = Dict[str, Any]
 
 
 class FileStorage(ConfigurableResource):
@@ -65,15 +64,25 @@ class FileStorage(ConfigurableResource):
     def collections_path(self) -> Path:
         return self._file_paths.collections_path
 
+    def ensure_collection_dir(self, collection: str):
+        return self._file_paths.ensure_collection_dir(collection)
+
+    def get_study_collection_dir(
+        self,
+        collection: str,
+        study_info: StudyInfo,
+    ) -> Path:
+        return self._file_paths.get_study_collection_dir(collection, study_info)
+
     def get_output_dir(
         self,
         collection: str,
-        dir_info: StudyInfo,
+        study_info: StudyInfo,
         analysis_name: str,
         code_version: str = "undefined",
     ) -> Path:
         return self._file_paths.get_output_dir(
-            collection, dir_info, analysis_name, code_version
+            collection, study_info, analysis_name, code_version
         )
 
     def make_output_dir(
@@ -112,15 +121,15 @@ class CollectionTables(ConfigurableResource):
                     else:
                         if table == "patients":
                             conn.execute(
-                                f"CREATE TABLE IF NOT EXISTS {table_name} (patient_id VARCHAR, gender VARCHAR, ethnicity VARCHAR, race VARCHAR);"
+                                f"CREATE TABLE IF NOT EXISTS {table_name} (patient_id VARCHAR);"
                             )
                         elif table == "studies":
                             conn.execute(
-                                f"CREATE TABLE IF NOT EXISTS {table_name} (patient_id VARCHAR, study_instance_uid VARCHAR, study_date DATE, study_description VARCHAR);"
+                                f"CREATE TABLE IF NOT EXISTS {table_name} (patient_id VARCHAR, study_uid VARCHAR, study_date DATE, study_description VARCHAR);"
                             )
                         elif table == "series":
                             conn.execute(
-                                f"CREATE TABLE IF NOT EXISTS {table_name} (patient_id VARCHAR, study_instance_uid VARCHAR, series_instance_uid VARCHAR, series_number BIGINT, modality VARCHAR, body_part_examined VARCHAR, series_description VARCHAR);"
+                                f"CREATE TABLE IF NOT EXISTS {table_name} (patient_id VARCHAR, study_uid VARCHAR, series_uid VARCHAR, series_number BIGINT, modality VARCHAR, body_part_examined VARCHAR, series_description VARCHAR);"
                             )
 
     def teardown_after_execution(self, _: InitResourceContext) -> None:
@@ -173,7 +182,7 @@ class CartilageThicknessTable(ConfigurableResource):
                 )
             else:
                 conn.execute(
-                    f"CREATE TABLE IF NOT EXISTS {self._table_name} (patient_id VARCHAR, study_uid VARCHAR, series_id VARCHAR, computed_files_dir VARCHAR, code_version VARCHAR);"
+                    f"CREATE TABLE IF NOT EXISTS {self._table_name} (patient_id VARCHAR, study_uid VARCHAR, series_uid VARCHAR, computed_files_dir VARCHAR, code_version VARCHAR);"
                 )
 
     def teardown_after_execution(self, _: InitResourceContext) -> None:
@@ -205,8 +214,7 @@ class OAISampler(ConfigurableResource):
     patient_ids_file: str = str(DATA_DIR / "oai-sampler" / "patient_ids.json")
 
     def get_time_point_folders(self) -> Dict[int, str]:
-        # months
-        # time_points = [0, 12, 18, 24, 30, 36, 48, 72, 96]
+        # all months = [0, 12, 18, 24, 30, 36, 48, 72, 96]
         # Most did not have time point 30
         time_points = [0, 12, 18, 24, 36, 48, 72, 96]
         time_point_folders = {
@@ -214,6 +222,40 @@ class OAISampler(ConfigurableResource):
             **{m: f"OAI{m}MonthImages" for m in time_points[1:]},
         }
         return time_point_folders
+
+    def setup_for_execution(self, _: InitResourceContext) -> None:
+        time_point_folders = self.get_time_point_folders()
+
+        patients_dfs = []
+
+        for time_point_folder in time_point_folders.values():
+            patients_file_path = (
+                Path(self.oai_data_root) / time_point_folder / "enrollee01.txt"
+            )
+            patients_table = csv.read_csv(
+                patients_file_path,
+                parse_options=csv.ParseOptions(delimiter="\t"),
+                read_options=csv.ReadOptions(skip_rows_after_names=1),
+            )
+            patients_df_tp = patients_table.to_pandas()
+            patients_dfs.append(patients_df_tp)
+
+        # stack rows from all enrollee01.txt files
+        self._patients_df = pd.concat(patients_dfs, ignore_index=True)
+
+        self._study_to_vol_path = pd.read_csv(
+            DATA_DIR / "oai-sampler" / "study_uid_to_vol_path.csv", dtype=str
+        )
+
+    def get_patient_info(self, patient_id: str) -> pd.DataFrame:
+        return self._patients_df.loc[
+            self._patients_df["src_subject_id"] == int(patient_id)
+        ].iloc[0]
+
+    def get_study_info(self, study_uid: str) -> pd.DataFrame:
+        return self._study_to_vol_path.loc[
+            self._study_to_vol_path["study_uid"] == study_uid
+        ].iloc[0]
 
     def get_patient_ids(self, file_name: Optional[str] = None) -> List[str]:
         if file_name:
@@ -228,58 +270,11 @@ class OAISampler(ConfigurableResource):
         return target_patients
 
     # patient ids: "9000798", "9007827", "9016304"
-    def get_samples(self, patient_id: str) -> pd.DataFrame:
+    def get_samples(self, patient_id: str) -> None:
         dess_file = DATA_DIR / "oai-sampler" / "SEG_3D_DESS_all.csv"
         dess_df = pd.read_csv(dess_file)
 
-        time_point_folders = self.get_time_point_folders()
-
-        first_folder = list(time_point_folders.values())[0]
-        patients_file_path = Path(self.oai_data_root) / first_folder / "enrollee01.txt"
-        patients_table = csv.read_csv(
-            patients_file_path,
-            parse_options=csv.ParseOptions(delimiter="\t"),
-            read_options=csv.ReadOptions(skip_rows=2, autogenerate_column_names=True),
-        )
-        patients_df = patients_table.to_pandas()
-
-        columns_to_include = ["patient_id", "gender", "ethnicity", "race"]
-        column_ids_to_include = [4, 7, 9, 18]
-
-        patients_df = patients_df.iloc[:, column_ids_to_include]
-        patients_df.columns = columns_to_include
-
-        for time_point_folder in list(time_point_folders.values())[1:]:
-            patients_file_path = (
-                Path(self.oai_data_root) / time_point_folder / "enrollee01.txt"
-            )
-            patients_table = csv.read_csv(
-                patients_file_path,
-                parse_options=csv.ParseOptions(delimiter="\t"),
-                read_options=csv.ReadOptions(
-                    skip_rows=2, autogenerate_column_names=True
-                ),
-            )
-            patients_df_tp = patients_table.to_pandas()
-
-            patients_df_tp = patients_df_tp.iloc[:, column_ids_to_include]
-            patients_df_tp.columns = columns_to_include
-
-            patients_df = pd.concat([patients_df, patients_df_tp])
-
-        result = pd.DataFrame(columns=[*columns_to_include, "month", "series_id"])
-        result = result.astype(
-            {
-                "patient_id": "string",
-                "series_id": "string",
-                "gender": "string",
-                "ethnicity": "string",
-                "race": "string",
-                "month": "int32",
-            }
-        )
-
-        for time_point_folder in time_point_folders.values():
+        for month, time_point_folder in self.get_time_point_folders().items():
             folder = Path(self.oai_data_root) / Path(time_point_folder) / "results"
             # filter out zip files
             for study in [study for study in folder.iterdir() if study.is_dir()]:
@@ -302,105 +297,22 @@ class OAISampler(ConfigurableResource):
 
                             frame_0 = itk.imread(vol_folder / os.listdir(vol_folder)[0])
                             meta = dict(frame_0)
-                            image = itk.imread(str(vol_folder))
-
-                            study_instance_uid = meta["0020|000d"]
-                            series_instance_uid = meta["0020|000e"]
-
-                            output_dir = (
-                                self.file_storage.staged_path
-                                / "oai"
-                                / "dagster"
-                                / str(patient_id)
-                                / str(study_instance_uid)
-                            )
-                            os.makedirs(output_dir, exist_ok=True)
-
-                            study_date = meta.get("0008|0020", "00000000")
-                            study_date = (
-                                f"{study_date[4:6]}-{study_date[6:8]}-{study_date[:4]}"
-                            )
-                            study_description = meta.get("0008|1030", "").strip()
-                            series_number = meta.get("0020|0011", "0")
-                            series_number = int(series_number)
-                            modality = meta.get("0008|0060", "").strip()
-                            body_part_examined = meta.get("0018|0015", "")
-                            series_description = meta.get("0008|103e", "").strip()
-                            log.info(
-                                f"{study_date} {study_description} {series_number} {modality} {body_part_examined} {series_description}"
-                            )
-
-                            studies_table = pd.DataFrame(
-                                [
-                                    {
-                                        "patient_id": patient_id,
-                                        "study_instance_uid": study_instance_uid,
-                                        "study_date": study_date,
-                                        "study_description": study_description,
-                                    }
-                                ],
-                                dtype="string",
-                            )
-
-                            series_table = pd.DataFrame(
-                                [
-                                    {
-                                        "patient_id": patient_id,
-                                        "study_instance_uid": study_instance_uid,
-                                        "series_instance_uid": series_instance_uid,
-                                        "series_number": series_number,
-                                        "modality": modality,
-                                        "body_part_examined": body_part_examined,
-                                        "series_description": series_description,
-                                    }
-                                ]
-                            ).astype(
-                                {
-                                    "patient_id": "string",
-                                    "study_instance_uid": "string",
-                                    "series_instance_uid": "string",
-                                    "series_number": "int32",
-                                    "modality": "string",
-                                    "body_part_examined": "string",
-                                    "series_description": "string",
-                                }
-                            )
+                            study_uid = meta["0020|000d"]
 
                             staged_study_path = (
                                 self.file_storage.staged_path
                                 / OAI_COLLECTION_NAME
                                 / "dagster"
                                 / patient_id
-                                / study_instance_uid
+                                / study_uid
                             )
+                            dicom_to_ingested(vol_folder, staged_study_path, patient_id)
 
-                            patient_info = patients_df.loc[
-                                patients_df["patient_id"] == int(patient_id)
-                            ].iloc[0]
-                            patient_info["patient_id"] = patient_id
-
-                            result.loc[len(result)] = patient_info
-
-                            with open(staged_study_path / "patient.json", "w") as fp:
-                                fp.write(
-                                    pd.DataFrame([patient_info]).to_json(
-                                        orient="records"
-                                    )
-                                )
-
-                            with open(staged_study_path / "study.json", "w") as fp:
-                                fp.write(studies_table.to_json())
-
-                            with open(staged_study_path / "series.json", "w") as fp:
-                                fp.write(series_table.to_json())
-
-                            nifti_path = (
-                                staged_study_path / "nifti" / series_instance_uid
+                            patient_collection_info = self.get_patient_info(patient_id)
+                            patient_collection_info["month"] = month
+                            patient_collection_info.to_json(
+                                path_or_buf=staged_study_path / "oai.json",
                             )
-                            os.makedirs(nifti_path, exist_ok=True)
-                            itk.imwrite(image, nifti_path / "image.nii.gz")
-
-        return result
 
 
 class OaiPipeline(ConfigurableResource, ABC):

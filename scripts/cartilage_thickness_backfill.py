@@ -22,7 +22,7 @@ def run_backfill(study_count, tags):
         "job",
         "backfill",
         "-j",
-        "cartilage_thickness_job",
+        "cartilage_thickness_oai_job",
         "--partitions",
         partitions,
     ]
