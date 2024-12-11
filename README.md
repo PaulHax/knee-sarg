@@ -86,20 +86,20 @@ By default, Dagster runs the pipeline in a subprocess on the same computer it ru
 
 ### Run OAI Cartilage Thickness Pipeline
 
-With Dagster running (`pixi run dev`), create a `patient_ids.json` file in the `knee-sarg/data/oai-sampler` directory. The JSON file should contain an array of OAI patient IDs. Example:
+Create a `study_uids_to_run.json` file in the `knee-sarg/data/oai-sampler` directory.
+The JSON file should contain an array of OAI study UIDs. Example:
 
 ```json
-["9000798", "9007827"]
+[
+    "1.3.6.1.4.1.21767.172.16.9.194.1169599504.4700.0",
+    "1.3.6.1.4.1.21767.172.16.9.194.1169599504.4701.0"
+]
 ```
 
-There are example JSON files in the `data/oai-sampler` directory.  
-A Dagster sensor checks that file every 30 seconds and kicks off this automatic flow:
+With Dagster running (`pixi run dev`,) materialize the `oai_study_uids_to_run` asset.
 
-1. A new patient ID partition is created for each patient ID in the `patient_ids.json` file.
-2. Asset OAI patient data is copied to `FILE_STORAGE_ROOT/staged`
-3. A sensor checks every 30 seconds for new folders of studies `staged` and starts the ingest_and_analyze_study job and creates a `study_uid` partition.
-4. ingest_study asset copies the study files to `FILE_STORAGE_ROOT/ingested`
-5. The cartilage_thickness asset runs the OAI_analysis_2 pipeline and copies the output files into `FILE_STORAGE_ROOT/collections`
+The `data/oai-sampler/make_study_uids_json.py` script will make a `study_uids_to_run.json` file by
+pulling from the study UIDs in `data/oai-sampler/study_uid_to_vol_path.csv`.
 
 #### Rerun Cartilage Thickness Pipeline
 
@@ -131,23 +131,24 @@ There is a python script that backfills a given number of studies with given tag
 pixi run ct-backfill --count 2 --tags '{"oai/code-version": "old-approach", "oai/src-directory": "/home/paulhax/src/old-OAI_analysis_2"}'
 ```
 
-##### Using JSON and Dagster Sensor
+#### Sample a OAI patient
 
-Create a data/oai-sampler/study_uids_to_run.json file. Save the file with JSON array of study UIDs. The metadata output of the cartilage_thickness::has_current_code_version_output code check can be used. Example JSON file
+This tests the cloud scan upload triggering cartilage thickness pipeline. For running with local access to OAI dataset, use the `oai_study_uids_to_run` method described above.
+
+With Dagster running (`pixi run dev`), create a `patient_ids.json` file in the `knee-sarg/data/oai-sampler` directory. The JSON file should contain an array of OAI patient IDs. Example:
 
 ```json
-[
-    "1.3.6.1.4.1.21767.172.16.9.203.1198108533.1.0",
-    "1.3.6.1.4.1.21767.172.16.9.203.1198108533.0.0"
-]
+["9000798", "9007827"]
 ```
 
-Then ensure the cartilage_thickness_study_uid_file_sensor is running.
+There are example JSON files in the `data/oai-sampler` directory.  
+A Dagster sensor checks that file every 30 seconds and kicks off this automatic flow:
 
-To re-run a study UID that has already been added to the JSON file, clear the cartilage_thickness_study_uid_file_sensor's cursor.
-
-To finds scans that have not been processed by the latest code version, run the cartilage_thickness::has_current_code_version_output check.
-The asset check's output metadata list all ingested study UIDs missing an output directory matching the current code version.
+1. A new patient ID partition is created for each patient ID in the `patient_ids.json` file.
+2. Asset OAI patient data is copied to `FILE_STORAGE_ROOT/staged`
+3. A sensor checks every 30 seconds for new folders of studies `staged` and starts the ingest_and_analyze_study job and creates a `study_uid` partition.
+4. ingest_study asset copies the study files to `FILE_STORAGE_ROOT/ingested`
+5. The cartilage_thickness asset runs the OAI_analysis_2 pipeline and copies the output files into `FILE_STORAGE_ROOT/collections`
 
 ### Post Run Analysis
 

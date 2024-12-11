@@ -3175,7 +3175,7 @@ packages:
   name: knee-sarg
   version: 1.0.0
   path: .
-  sha256: 068c793a69ea63e7c681cb97a1d6a43fa611aa13f62cb4c8cfa78c600d274af9
+  sha256: b3a6b53d35ee848172acad9318e2bcc14c6c8d5bffe58b895cb4814e88d90a36
   requires_dist:
   - dagster-dbt>=0.25.4
   - dagster-duckdb-polars>=0.25.3
