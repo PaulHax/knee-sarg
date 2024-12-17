@@ -20,7 +20,7 @@ from .jobs import (
 )
 
 
-@sensor(job=ingest_and_analyze_study_job, default_status=DefaultSensorStatus.RUNNING)
+@sensor(job=ingest_and_analyze_study_job, default_status=DefaultSensorStatus.STOPPED)
 def staged_study_sensor(context: SensorEvaluationContext, file_storage: FileStorage):
     """
     Sensor that triggers when a study is staged.
@@ -87,7 +87,7 @@ def staged_study_sensor(context: SensorEvaluationContext, file_storage: FileStor
 
 @sensor(
     job=stage_oai_sample_job,
-    default_status=DefaultSensorStatus.RUNNING,
+    default_status=DefaultSensorStatus.STOPPED,
 )
 def patient_id_sensor(context: SensorEvaluationContext):
     """

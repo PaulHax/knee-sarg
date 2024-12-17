@@ -58,7 +58,7 @@ For a 2 concurrent runs of the pipeline, we need a computer with \~22 GB GPU mem
 ```bash
 git clone https://github.com/dzenanz/OAI_analysis_2.git
 cd OAI_analysis_2
-python3.8 -m virtualenv venv # OAI analysis 2 requires Python 3.8
+python -m virtualenv venv
 source venv/bin/activate
 pip install --upgrade pip
 pip install -e .
@@ -142,7 +142,7 @@ With Dagster running (`pixi run dev`), create a `patient_ids.json` file in the `
 ```
 
 There are example JSON files in the `data/oai-sampler` directory.  
-A Dagster sensor checks that file every 30 seconds and kicks off this automatic flow:
+Start the the `patient_id_sensor` and the `staged_study_sensor` sensors. The `patient_id_sensor` sensor checks the `patient_ids.json` file every 30 seconds and kicks off this automatic flow:
 
 1. A new patient ID partition is created for each patient ID in the `patient_ids.json` file.
 2. Asset OAI patient data is copied to `FILE_STORAGE_ROOT/staged`
