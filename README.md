@@ -2,6 +2,29 @@
 
 Knee-SARG is a fully open-source and local-first platform image analysis tool.
 
+## Features
+
+-   **Environment Setup with Pixi**: Utilizes Pixi for managing reproducible software environments and CLI tasks.
+-   **OAI Cartilage Thickness Pipeline**: Image processing pipeline for Knee MRIs wht the `OAI_analysis_2` codebase.
+-   **Dagster Orchestration**:
+    -   Manages data assets and pipeline execution using partitions corresponding to study UIDs and patient IDs.
+    -   Supports concurrent runs.
+    -   Allows running pipelines locally, via SSH, or in a SLURM cluster.
+-   **Pipeline Execution and Reruns**:
+    -   Execute pipelines on selected study UIDs or patient IDs.
+    -   Rerun pipelines with different code versions using Dagster tags.
+    -   Provides CLI commands for running and backfilling pipeline runs.
+    -   Browse logs from pipeline runs that have failed.
+-   **Automation with directory watching**:
+    -   Employs Dagster sensors to watch a directory and automatically trigger analysis jobs.
+-   **Post-Run Analysis**:
+    -   Collects pipeline results into a structured directory hierarchy.
+    -   Generates a runs table (`cartilage_thickness_runs.parquet`) for tracking execution details.
+    -   Provides scripts and Jupyter notebooks for aggregating and visualizing results.
+-   **Error Handling and Asset Checks**:
+    -   Implements asset checks to identify and list failed or missing output results.
+    -   Facilitates easy reruns of failed analyses by providing lists of partitions that require attention.
+
 ## ⚙️ Setup and execution
 
 ### 🐍 Pixi
@@ -86,6 +109,8 @@ By default, Dagster runs the pipeline in a subprocess on the same computer it ru
 
 ### Run OAI Cartilage Thickness Pipeline
 
+#### Create study_uids_to_run.json
+
 Create a `study_uids_to_run.json` file in the `knee-sarg/data/oai-sampler` directory.
 The JSON file should contain an array of OAI study UIDs. Example:
 
@@ -96,16 +121,19 @@ The JSON file should contain an array of OAI study UIDs. Example:
 ]
 ```
 
-With Dagster running (`pixi run dev`,) materialize the `oai_study_uids_to_run` asset.
-
 The `data/oai-sampler/make_study_uids_json.py` script will make a `study_uids_to_run.json` file by
 pulling from the study UIDs in `data/oai-sampler/study_uid_to_vol_path.csv`.
 
-#### Rerun Cartilage Thickness Pipeline
+#### Materialize `oai_study_uids_to_run`
+
+With Dagster running (`pixi run dev`,) materialize the `oai_study_uids_to_run` asset.
+
+### Rerun Cartilage Thickness Pipeline
 
 ##### Using CLI
 
-After ingesting patient(s), you can rerun specific the pipeline on select `study_uid`s partitions via the Dagster CLI
+After study_uid partitions have been created (by materializing `oai_study_uids_to_run`),
+you can rerun specific the pipeline on select `study_uid`s partitions via the Dagster CLI:
 
 ```bash
 pixi run cartilage-thickness --partitions 1.3.12.2.1107.5.2.13.20576.4.0.8047887714483085,1.3.6.1.4.1.21767.172.16.11.7.1385496118.2.0
@@ -152,13 +180,49 @@ Start the the `patient_id_sensor` and the `staged_study_sensor` sensors. The `pa
 
 ### Post Run Analysis
 
-#### Collect Images in directory
+#### OAI Collection Directory structure
 
-Puts all 2D images in a flat `collections/oai/all-images` directory
+`FILE_STORAGE_ROOT/collections/oai/[patient id]/[study description-study UID]/cartilage_thickness/[code version]`
+
+The study level directory, (study description-study UID,) holds `oai.json`. That file has
+fields from the patient's matching record in the OAI dataset's `enrollee01.txt` file.
+
+#### Pipeline Runs Table
+
+The `collections/oai/cartilage_thickness_runs.parquet` file has a row for each completed run.  
+Use the table to iterate through the pipeline results. The columns:
+
+`patient_id  study_uid  series_uid  computed_files_dir  code_version`
+
+#### Collect images in one directory
+
+Puts all 2D images in a flat `collections/oai/all-images` directory.
+
+To collect images, materialize the `collected_images_oai` asset or run this CLI command:
 
 ```bash
 pixi run collect-images
 ```
+
+#### View images in Jupyter Notebook
+
+```bash
+pixi run jupyter
+```
+
+Then open `scripts/cartilage_thickness_images.ipynb`
+
+#### Collect study UIDs that failed
+
+There are 2 Dagster asset checks can can be used to build lists of errored study UID partitions to rerun.
+Run the asset check, then view it's metadata in Dagster UI to get list of `study_uid` partitions.
+
+-   `has_current_code_version_output_oai` asset check lists `study_uid` partitions that don't have runs matching
+    the current code version in the `CARTILAGE_THICKNESS_CODE_VERSION` env var.
+-   `has_image_files` asset check sees if rows in `cartilage_thickness_runs.parquet` file are missing images in
+    the output directories.
+
+Knee-SARG is a fully open-source, local-first image analysis platform that uses Dagster for orchestrating image processing pipelines, specifically for cartilage thickness analysis on knee imaging data from the Osteoarthritis Initiative (OAI).
 
 ## 💡 Principles
 
