@@ -5,16 +5,16 @@ Knee-SARG is a fully open-source and local-first platform image analysis tool.
 ## Features
 
 -   **Environment Setup with Pixi**: Utilizes Pixi for managing reproducible software environments and CLI tasks.
--   **OAI Cartilage Thickness Pipeline**: Image processing pipeline for Knee MRIs wht the `OAI_analysis_2` codebase.
+-   **OAI Cartilage Thickness Pipeline**: Image processing pipeline for Knee MRIs with the `OAI_analysis_2` codebase.
 -   **Dagster Orchestration**:
     -   Manages data assets and pipeline execution using partitions corresponding to study UIDs and patient IDs.
     -   Supports concurrent runs.
     -   Allows running pipelines locally, via SSH, or in a SLURM cluster.
+    -   Browse logs from pipeline runs that have failed.
 -   **Pipeline Execution and Reruns**:
     -   Execute pipelines on selected study UIDs or patient IDs.
     -   Rerun pipelines with different code versions using Dagster tags.
     -   Provides CLI commands for running and backfilling pipeline runs.
-    -   Browse logs from pipeline runs that have failed.
 -   **Automation with directory watching**:
     -   Employs Dagster sensors to watch a directory and automatically trigger analysis jobs.
 -   **Post-Run Analysis**:
@@ -100,12 +100,17 @@ PIPELINE_SRC_DIR=/home/paulhax/src/OAI_analysis_2 # pipeline repo dir
 ENV_SETUP_COMMAND=. ./venv/bin/activate
 ```
 
-##### Optionally Running via SSH
+##### Run via SSH
 
 By default, Dagster runs the pipeline in a subprocess on the same computer it runs. If the computer that runs the pipeline is different than the Dagster one, make a user with SSH access on the pipeline running computer.
 
 -   Set the `OAI_PIPELINE_RESOURCE` environment variable to `ssh`
 -   Set `SSH_HOST`, `SSH_USERNAME`, `SSH_PASSWORD` environment variables when calling `pixi run dev`
+
+##### Run via SLURM
+
+-   Set the `OAI_PIPELINE_RESOURCE` environment variable to `slurm`
+-   Set the `SBATCH_ARGS` environment variable to CLI args to pass to SLURM's sbatch program. I.e `SBATCH_ARGS=--partition=firstq`
 
 ### Run OAI Cartilage Thickness Pipeline
 
